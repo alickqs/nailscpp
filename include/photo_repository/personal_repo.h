@@ -1,0 +1,8 @@
+//
+// Created by Uliana S on 28.02.2026.
+//
+
+#ifndef NAILSCPP_PERSONAL_REPO_H
+#define NAILSCPP_PERSONAL_REPO_H
+
+#endif //NAILSCPP_PERSONAL_REPO_H
