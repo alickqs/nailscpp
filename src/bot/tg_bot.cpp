@@ -1,4 +1,4 @@
-#include "../include/bot/tg_bot.h"
+//#include "tg_bot.h"
 #include <iostream>
 #include <ctime>
 #include <sstream>
