@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <chrono>
+#include <optional>
 
 using PhotoId = std::uint64_t;
 
@@ -17,9 +18,23 @@ struct Photo {
     std::string description;
     std::filesystem::path filePath;
     std::chrono::system_clock::time_point createdAt;
+    std::string repoType;
+    std::optional<std::string> ownerId;
 
     Photo(PhotoId id,
           std::string description,
           std::filesystem::path filePath);
+
+    Photo(PhotoId id,
+          std::string description,
+          std::filesystem::path filePath,
+          std::chrono::system_clock::time_point createdAt);
+
+    Photo(PhotoId id,
+          std::string description,
+          std::filesystem::path filePath,
+          std::chrono::system_clock::time_point createdAt,
+          std::string repoType,
+          std::optional<std::string> ownerId);
 };
 #endif //NAILSCPP_PHOTO_H
