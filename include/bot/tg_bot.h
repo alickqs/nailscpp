@@ -1,12 +1,14 @@
 #ifndef TG_BOT_H
 #define TG_BOT_H
 
+
 #include <string>
 #include <functional>
 #include <vector>
 #include <utility>
 #include <map>
 #include <nlohmann/json.hpp>
+
 
 struct ManicureData {
     std::string photoUrl;
