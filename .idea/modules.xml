@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/nailscpp.iml" filepath="$PROJECT_DIR$/.idea/nailscpp.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/nailscppCHECK.iml" filepath="$PROJECT_DIR$/.idea/nailscppCHECK.iml" />
     </modules>
   </component>

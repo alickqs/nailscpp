@@ -1,7 +1,6 @@
 find_package(SQLite3 REQUIRED)
 
 add_library(photo_repository
-        photo_repository/photo.cpp
         photo_repository/photo_repo.cpp
         photo_repository/personal_repo.cpp
         photo_repository/shared_repo.cpp
