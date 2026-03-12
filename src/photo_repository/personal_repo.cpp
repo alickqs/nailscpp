@@ -10,7 +10,7 @@ PersonalRepository::PersonalRepository(std::filesystem::path storageDirectory, s
     : PhotoRepository(std::move(storageDirectory), "personal", std::move(ownerId)) {}
 
 PhotoId PersonalRepository::exportPhotoToShared(PhotoId id, SharedRepository& sharedRepository, bool removeAfterTransfer) {
-    const std::optional<Photo> photo = getPhotoInfo(id);
+    const std::optional<ManiqureDataUpdated> photo = getPhotoInfo(id);
     if (!photo.has_value()) {
         throw PhotoNotFoundError("Photo not found in personal repository");
     }

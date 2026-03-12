@@ -5,11 +5,11 @@
 
 #include <filesystem>
 #include <string>
+//тест на работу photo_repository - не учитавает tgbot и поиск (11.03)
 
 namespace fs = std::filesystem;
 
 namespace {
-
 class SmokeTest1 : public ::testing::Test {
 protected:
     void SetUp() override {

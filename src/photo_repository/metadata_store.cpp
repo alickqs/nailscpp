@@ -103,8 +103,9 @@ void MetadataStore::ensureSchema() {
     }
 }
 
-std::vector<Photo> MetadataStore::loadAll(const std::string& repoType,
-                                          const std::optional<std::string>& ownerId) const {
+std::vector<ManiqureDataUpdated> MetadataStore::loadAll(
+    const std::string& repoType,
+    const std::optional<std::string>& ownerId) const {
     constexpr const char* kSelectSql =
         "SELECT id, description, file_path, created_at, repo_type, owner_id "
         "FROM photos "
@@ -114,7 +115,7 @@ std::vector<Photo> MetadataStore::loadAll(const std::string& repoType,
     Statement statement(db_, kSelectSql);
     bindRepositoryScope(statement.get(), 1, repoType, ownerId);
 
-    std::vector<Photo> photos;
+    std::vector<ManiqureDataUpdated> photos;
 
     while (true) {
         const int rc = sqlite3_step(statement.get());
@@ -172,7 +173,7 @@ PhotoId MetadataStore::loadMaxId() const {
     return static_cast<PhotoId>(sqlite3_column_int64(statement.get(), 0));
 }
 
-void MetadataStore::insertPhoto(const Photo& photo) {
+void MetadataStore::insertPhoto(const ManiqureDataUpdated& photo) {
     constexpr const char* kInsertSql =
         "INSERT INTO photos (id, description, file_path, created_at, repo_type, owner_id) "
         "VALUES (?, ?, ?, ?, ?, ?);";

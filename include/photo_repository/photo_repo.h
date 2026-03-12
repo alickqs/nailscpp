@@ -6,7 +6,6 @@
 #define NAILSCPP_PHOTO_REPO_H
 
 #include "photo_repository/metadata_store.h"
-#include "photo_repository/photo.h"
 
 #include <filesystem>
 #include <memory>
@@ -52,10 +51,11 @@ public:
     PhotoId uploadFromDevice(const std::filesystem::path& sourcePath,
                              std::string description);
 
-    std::vector<Photo> listPhotos(std::size_t page = 0,
-                                  std::size_t pageSize = kDefaultPageSize) const;
+    std::vector<ManiqureDataUpdated> listPhotos(
+        std::size_t page = 0,
+        std::size_t pageSize = kDefaultPageSize) const;
 
-    std::optional<Photo> getPhotoInfo(PhotoId id) const;
+    std::optional<ManiqureDataUpdated> getPhotoInfo(PhotoId id) const;
 
     void downloadToDevice(PhotoId id,
                           const std::filesystem::path& destinationPath) const;
@@ -66,15 +66,15 @@ public:
     std::vector<PhotoId> findByDescription(std::string_view query) const;
 
 protected:
-    PhotoId copyPhotoToThisRepository(const Photo& photoToCopy);
+    PhotoId copyPhotoToThisRepository(const ManiqureDataUpdated& photoToCopy);
     void removePhoto(PhotoId id);
 
     const std::filesystem::path& getStorageDirectory() const noexcept;
-    const Photo* findPhotoById(PhotoId id) const noexcept;
-    Photo* findPhotoById(PhotoId id) noexcept;
+    const ManiqureDataUpdated* findPhotoById(PhotoId id) const noexcept;
+    ManiqureDataUpdated* findPhotoById(PhotoId id) noexcept;
 
 private:
-    using Storage = std::vector<std::unique_ptr<Photo>>;
+    using Storage = std::vector<std::unique_ptr<ManiqureDataUpdated>>;
 
     std::filesystem::path storageDirectory_;
     std::string repoType_;
