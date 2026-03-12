@@ -21,6 +21,7 @@ void TelegramBot::start() {
             if (!lastUpdateId.empty()) {
                 payload["offset"] = std::stoi(lastUpdateId) + 1;
             }
+
             auto response = makeRequest("getUpdates", payload);
             handleUpdates(response["result"]);
         } catch (const std::exception& e) {

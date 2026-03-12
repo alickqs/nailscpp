@@ -1,7 +1,7 @@
 #ifndef NAILSCPP_METADATA_STORE_H
 #define NAILSCPP_METADATA_STORE_H
 
-//#include "photo_repository/maniqure_data_updated.h"
+#include "photo_repository/maniqure_data_updated.h"
 
 #include <filesystem>
 #include <memory>

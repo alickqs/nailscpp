@@ -12,7 +12,7 @@
 #include <nlohmann/json.hpp>
 
 struct ManicureData {
-    std::string id;  // PhotoId
+    std::string id; // PhotoId
     std::string description;
     std::filesystem::path filePath;
     std::chrono::system_clock::time_point createdAt;
