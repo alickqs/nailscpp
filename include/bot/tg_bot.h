@@ -9,10 +9,15 @@
 #include <optional>
 #include <chrono>
 #include <filesystem>
+#include <memory>
+#include <mutex>
+#include <variant>
+#include <thread>
 #include <nlohmann/json.hpp>
 
+// Структура данных маникюра
 struct ManicureData {
-    std::string id; // PhotoId
+    std::string id;  // PhotoId
     std::string description;
     std::filesystem::path filePath;
     std::chrono::system_clock::time_point createdAt;
@@ -20,56 +25,72 @@ struct ManicureData {
     std::optional<std::string> ownerId;
 };
 
+// Функция для генерации рекомендации
+ManicureData generateNextManicureRecommendation(const ManicureData& lastManicure);
+
 // Репозиторий для работы с маникюрами
 class ManicureRepository {
 private:
-    // Используем shared_ptr для автоматического управления памятью
     std::map<std::string, std::shared_ptr<ManicureData>> storage;
-
     std::shared_ptr<std::mutex> storageMutex;
 
 public:
+    // конструктор и деструктор
     ManicureRepository();
-
     ~ManicureRepository() = default;
 
-    // Запрещаем копирование
+    //запрещаем копирование и присваивание, разрешаем перемещение
     ManicureRepository(const ManicureRepository&) = delete;
     ManicureRepository& operator=(const ManicureRepository&) = delete;
-
-    // Разрешаем перемещение
     ManicureRepository(ManicureRepository&&) = default;
     ManicureRepository& operator=(ManicureRepository&&) = default;
 
-    // Добавление маникюра с перемещением данных
+    //методы для работы с репозиторием
     void add(std::string id, std::shared_ptr<ManicureData> data);
-
-    // Получение маникюра по ID (optional - может не найтись)
     std::optional<std::shared_ptr<ManicureData>> get(const std::string& id) const;
-
-    // Получение последнего маникюра пользователя (optional)
     std::optional<std::shared_ptr<ManicureData>> getLastUserManicure(const std::string& userId) const;
-
-    // Получение всех маникюров пользователя
     std::vector<std::shared_ptr<ManicureData>> getUserManicures(const std::string& userId) const;
-
-    // Поиск маникюров по тексту в описании
     std::vector<std::shared_ptr<ManicureData>> search(const std::string& text) const;
-
-    // Удаление маникюра
     std::optional<bool> remove(const std::string& id);
-
-    // Получение количества маникюров
     [[nodiscard]] size_t size() const noexcept;
-
-    // Очистка всех данных
     void clear() noexcept;
-
-    // Сохранение в файл
     void saveToFile(const std::string& filename) const;
-
-    // Загрузка из файла с обработкой исключений
     void loadFromFile(const std::string& filename);
+};
+
+// типы действий пользователя
+struct ActionShowAll {};
+struct ActionShowLast {};
+struct ActionSearch {};
+struct ActionDelete {
+    std::string manicureId;
+};
+struct ActionRecommend {
+    std::string manicureId;
+};
+struct ActionBack {};
+
+using UserAction = std::variant<ActionShowAll, ActionShowLast, ActionSearch,
+        ActionDelete, ActionRecommend, ActionBack>;
+
+class TelegramBot;
+
+class ActionVisitor {
+private:
+    TelegramBot* bot;
+    std::string chatId;
+
+public:
+    // конструктор
+    ActionVisitor(TelegramBot* b, const std::string& id) : bot(b), chatId(id) {}
+
+    // методы для обработки действий пользователя
+    void operator()(const ActionShowAll&) const;
+    void operator()(const ActionShowLast&) const;
+    void operator()(const ActionSearch&) const;
+    void operator()(const ActionDelete& action) const;
+    void operator()(const ActionRecommend& action) const;
+    void operator()(const ActionBack&) const;
 };
 
 class TelegramBot {
@@ -77,35 +98,63 @@ private:
     std::string botToken;
     std::string apiUrl;
     std::string lastUpdateId;
-    std::map<std::string, ManicureData> manicureStorage; //ключ-id, значение-структура маникюра
-    std::map<std::string, std::string> userStates; //ключ-id, значение-текущее состояние(ожидание ссылки или описания)
-    std::map<std::string, std::string> tempPhotoUrls; //временное хранение ссылки перед получением описания
 
-    //работа с кнопочками
+    std::unique_ptr<ManicureRepository> repository;
+    std::shared_ptr<class Logger> logger;
+
+    std::map<std::string, std::string> userStates;
+    std::map<std::string, std::string> tempPhotoUrls;
+    std::map<std::string, std::string> searchQueries;
+    std::map<std::string, int> userManicureCounters;
+
+    struct CacheEntry {
+        nlohmann::json data;
+        std::chrono::steady_clock::time_point timestamp;
+    };
+    std::map<std::string, CacheEntry> responseCache;
+    const std::chrono::seconds CACHE_TTL{30};
+
+    struct ConnectionPool;
+    std::vector<std::unique_ptr<ConnectionPool>> connectionPool;
+    const size_t POOL_SIZE = 5;
+    size_t currentConnection = 0;
+
+    //обработка запросов
     nlohmann::json createInlineKeyboard(const std::vector<std::vector<std::pair<std::string, std::string>>>& buttons);
     void sendMessageWithKeyboard(const std::string& chatId, const std::string& text, const nlohmann::json& keyboard);
     void handleCallbackQuery(const nlohmann::json& callbackQuery);
 
-    //работа с самим маникюром
+    //методы для работы с маникюром
     void handleManicureRequest(const std::string& chatId);
     void saveManicureData(const std::string& chatId, const std::string& photoUrl, const std::string& description);
     void showManicureData(const std::string& chatId, const std::string& dataId);
-    // Используем unique_ptr для репозитория (единоличное владение)
-    std::unique_ptr<ManicureRepository> repository;
 
-    // Logger с shared_ptr (может использоваться несколькими компонентами)
-    std::shared_ptr<class Logger> logger;
+    // методы для работы с кнопочками
+    void showMainMenu(const std::string& chatId);
+    void showManicureList(const std::string& chatId, const std::vector<std::shared_ptr<ManicureData>>& manicures);
+    void showManicureDetails(const std::string& chatId, const std::string& manicureId);
+    void handleSearchQuery(const std::string& chatId, const std::string& query);
+    void confirmDelete(const std::string& chatId, const std::string& manicureId);
+    void showRecommendation(const std::string& chatId, const std::string& manicureId);
+
+    void handleUserAction(const std::string& chatId, const UserAction& action);
+
+    std::string generateUniqueId(const std::string& chatId);
+    ConnectionPool* getConnection();
+    void clearExpiredCache();
 
 public:
+    //конструктор и деструктор
     TelegramBot(const std::string& token);
+    ~TelegramBot();
+
+    //старт
     void start();
     void handleUpdates(const nlohmann::json& updates);
     void sendMessage(const std::string& chatId, const std::string& text);
     nlohmann::json makeRequest(const std::string& method, const nlohmann::json& payload = {});
-    // методы для работы с репозиторием
-    void listUserManicures(const std::string& chatId);
-    void searchManicures(const std::string& chatId, const std::string& query);
-    void deleteManicure(const std::string& chatId, const std::string& manicureId);
+
+    friend class ActionVisitor;
 };
 
 #endif // TG_BOT_H
