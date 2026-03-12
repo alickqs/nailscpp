@@ -25,8 +25,15 @@ struct ManicureData {
     std::optional<std::string> ownerId;
 };
 
+// Структура для рекомендации
+struct RecommendationData {
+    std::string description;           // Текстовое описание рекомендации
+    std::vector<char> imageData;        // Данные PNG изображения
+    std::string imageFormat;
+};
+
 // Функция для генерации рекомендации
-ManicureData generateNextManicureRecommendation(const ManicureData& lastManicure);
+RecommendationData generateNextManicureRecommendation(const ManicureData& lastManicure);
 
 // Репозиторий для работы с маникюрами
 class ManicureRepository {
@@ -136,6 +143,9 @@ private:
     void handleSearchQuery(const std::string& chatId, const std::string& query);
     void confirmDelete(const std::string& chatId, const std::string& manicureId);
     void showRecommendation(const std::string& chatId, const std::string& manicureId);
+
+    // Новый метод для отправки фото
+    void sendPhoto(const std::string& chatId, const std::vector<char>& imageData, const std::string& caption);
 
     void handleUserAction(const std::string& chatId, const UserAction& action);
 

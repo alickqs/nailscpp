@@ -6,6 +6,7 @@
 #include <fstream>
 #include <mutex>
 #include <thread>
+#include <random>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast.hpp>
@@ -15,16 +16,54 @@
 using tcp = boost::asio::ip::tcp;
 namespace http = boost::beast::http;
 
-// Пустая функция для рекомендаций (будет реализована позже)
-ManicureData generateNextManicureRecommendation(const ManicureData& lastManicure) {
-    // TODO: Реализовать логику рекомендации
-    ManicureData recommendation;
-    recommendation.id = "recommendation_" + lastManicure.id;
-    recommendation.description = "Рекомендация на основе: " + lastManicure.description;
-    recommendation.filePath = lastManicure.filePath;
-    recommendation.createdAt = std::chrono::system_clock::now();
-    recommendation.repoType = "recommendation";
-    recommendation.ownerId = lastManicure.ownerId;
+std::vector<char> generateTestPng() {
+    const unsigned char pngData[] = {
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,  // PNG signature
+            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,  // IHDR chunk
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,  // width=1, height=1
+            0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,  // color type, compression
+            0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,  // IDAT chunk
+            0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,  // data
+            0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,  // IEND chunk
+            0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,  // ...
+            0x42, 0x60, 0x82
+    };
+
+    std::vector<char> result;
+    result.assign(reinterpret_cast<const char*>(pngData),
+                  reinterpret_cast<const char*>(pngData) + sizeof(pngData));
+    return result;
+}
+
+// Функция для генерации рекомендации
+RecommendationData generateNextManicureRecommendation(const ManicureData& lastManicure) {
+    RecommendationData recommendation;
+
+    std::stringstream ss;
+    ss << "✨ *Рекомендация для следующего маникюра*\n\n";
+    ss << "На основе вашего маникюра:\n";
+    ss << "📝 " << lastManicure.description << "\n\n";
+
+    std::vector<std::string> tips = {
+            "Попробуйте добавить блестки для вечернего образа",
+            "Рекомендуем использовать пастельные тона в этом сезоне",
+            "Отличным дополнением будет французский маникюр",
+            "Попробуйте геометрический узор на одном пальце",
+            "Добавьте стразы для особого случая",
+            "Рекомендуем увлажняющий уход перед следующим покрытием"
+    };
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, tips.size() - 1);
+
+    ss << "💡 " << tips[dis(gen)] << "\n\n";
+    ss << "";
+
+    recommendation.description = ss.str();
+    recommendation.imageData = generateTestPng();
+    recommendation.imageFormat = "png";
+
     return recommendation;
 }
 
@@ -411,6 +450,69 @@ void TelegramBot::handleUpdates(const nlohmann::json& updates) {
     }
 }
 
+// Метод для отправки фото
+void TelegramBot::sendPhoto(const std::string& chatId, const std::vector<char>& imageData, const std::string& caption) {
+    try {
+        std::string boundary = "----WebKitFormBoundary" + std::to_string(std::time(nullptr));
+
+        std::string body;
+        body += "--" + boundary + "\r\n";
+        body += "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n";
+        body += chatId + "\r\n";
+
+        body += "--" + boundary + "\r\n";
+        body += "Content-Disposition: form-data; name=\"caption\"\r\n\r\n";
+        body += caption + "\r\n";
+
+        body += "--" + boundary + "\r\n";
+        body += "Content-Disposition: form-data; name=\"photo\"; filename=\"recommendation.png\"\r\n";
+        body += "Content-Type: image/png\r\n\r\n";
+
+        std::vector<char> requestBody;
+        requestBody.insert(requestBody.end(), body.begin(), body.end());
+        requestBody.insert(requestBody.end(), imageData.begin(), imageData.end());
+
+        std::string footer = "\r\n--" + boundary + "--\r\n";
+        requestBody.insert(requestBody.end(), footer.begin(), footer.end());
+
+        auto* conn = getConnection();
+
+        tcp::resolver resolver(*conn->ioc);
+        boost::beast::ssl_stream<boost::beast::tcp_stream> stream(*conn->ioc, *conn->ssl_ctx);
+
+        auto const results = resolver.resolve("api.telegram.org", "443");
+        boost::beast::get_lowest_layer(stream).connect(results);
+        stream.handshake(boost::asio::ssl::stream_base::client);
+
+        http::request<http::vector_body<char>> req{http::verb::post, "/bot" + botToken + "/sendPhoto", 11};
+        req.set(http::field::host, "api.telegram.org");
+        req.set(http::field::content_type, "multipart/form-data; boundary=" + boundary);
+        req.set(http::field::content_length, std::to_string(requestBody.size()));
+        req.body() = std::move(requestBody);
+        req.prepare_payload();
+
+        http::write(stream, req);
+
+        boost::beast::flat_buffer buffer;
+        http::response<http::string_body> res;
+        http::read(stream, buffer, res);
+
+        boost::system::error_code ec;
+        stream.shutdown(ec);
+
+        if (ec && ec != boost::asio::ssl::error::stream_truncated) {
+            throw boost::system::system_error(ec);
+        }
+
+        logger->log("Photo sent to " + chatId + ", size: " + std::to_string(imageData.size()) + " bytes");
+
+    } catch (const std::exception& e) {
+        logger->log("Failed to send photo: " + std::string(e.what()));
+        // Если не удалось отправить фото, отправляем обычное сообщение
+        sendMessage(chatId, caption + "\n\n(Не удалось отправить изображение)");
+    }
+}
+
 //алгоритм действий бота
 void TelegramBot::handleCallbackQuery(const nlohmann::json& callbackQuery) {
     std::string chatId = std::to_string(callbackQuery["message"]["chat"]["id"].get<int>());
@@ -442,7 +544,7 @@ void TelegramBot::handleCallbackQuery(const nlohmann::json& callbackQuery) {
                 "• Просматривать все свои записи\n"
                 "• Искать по описанию\n"
                 "• Удалять записи\n"
-                "• Получать рекомендации на основе последнего маникюра\n\n"
+                "• Получать рекомендации с PNG изображениями\n\n"
                 "Используйте меню для навигации!";
         sendMessage(chatId, helpText);
     }
@@ -712,22 +814,16 @@ void TelegramBot::showRecommendation(const std::string& chatId, const std::strin
 
     auto data = *dataOpt;
 
-    // Вызываем функцию рекомендации
-    ManicureData recommendation = generateNextManicureRecommendation(*data);
+    RecommendationData recommendation = generateNextManicureRecommendation(*data);
 
-    std::string message =
-            "💡 *Рекомендация для следующего маникюра*\n\n"
-            "На основе вашего последнего маникюра:\n"
-            "📝 " + data->description + "\n\n"
-                                       "✨ *Рекомендация:*\n" + recommendation.description + "\n\n"
-                                                                                            "(Функция рекомендации находится в разработке)";
+    sendPhoto(chatId, recommendation.imageData, recommendation.description);
 
     std::vector<std::vector<std::pair<std::string, std::string>>> buttons = {
             {{"◀️ Назад к маникюру", "view_" + manicureId}, {"🏠 Главное меню", "back"}}
     };
 
     auto keyboard = createInlineKeyboard(buttons);
-    sendMessageWithKeyboard(chatId, message, keyboard);
+    sendMessageWithKeyboard(chatId, "✨ *Рекомендация отправлена выше*", keyboard);
 }
 
 void TelegramBot::handleUserAction(const std::string& chatId, const UserAction& action) {
