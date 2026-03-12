@@ -12,7 +12,214 @@
 using tcp = boost::asio::ip::tcp;
 namespace http = boost::beast::http;
 
-TelegramBot::TelegramBot(const std::string& token): botToken(token), apiUrl("https://api.telegram.org/bot" + token) {}
+class Logger {
+private:
+    std::unique_ptr<std::ofstream> logFile;
+
+public:
+    explicit Logger(const std::string& filename) {
+        try {
+            logFile = std::make_unique<std::ofstream>(filename, std::ios::app);
+            if (!logFile->is_open()) {
+                throw std::runtime_error("Cannot open log file: " + filename);
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Logger initialization failed: " << e.what() << std::endl;
+            throw; // Пробрасываем исключение дальше
+        }
+    }
+
+    ~Logger() {
+        if (logFile && logFile->is_open()) {
+            *logFile << "=== Logger shutting down ===" << std::endl;
+            logFile->close();
+        }
+    }
+
+    void log(const std::string& message) {
+        if (logFile && logFile->is_open()) {
+            auto now = std::chrono::system_clock::now();
+            auto now_time_t = std::chrono::system_clock::to_time_t(now);
+
+            *logFile << "[" << std::put_time(std::localtime(&now_time_t), "%Y-%m-%d %H:%M:%S") << "] "
+                     << message << std::endl;
+        }
+    }
+};
+
+// Реализация ManicureRepository
+
+ManicureRepository::ManicureRepository()
+        : storageMutex(std::make_shared<std::mutex>()) {
+    // Инициализация пустого репозитория
+}
+
+void ManicureRepository::add(std::string id, std::shared_ptr<ManicureData> data) {
+    std::lock_guard<std::mutex> lock(*storageMutex); // RAII для мьютекса
+
+    if (!data) {
+        throw std::invalid_argument("Cannot add null data to repository");
+    }
+
+    // Используем move для id
+    storage[std::move(id)] = std::move(data);
+}
+
+std::optional<std::shared_ptr<ManicureData>> ManicureRepository::get(const std::string& id) const {
+    std::lock_guard<std::mutex> lock(*storageMutex);
+
+    auto it = storage.find(id);
+    if (it == storage.end()) {
+        return std::nullopt; // optional без значения
+    }
+
+    return it->second; // optional с shared_ptr
+}
+
+std::optional<std::shared_ptr<ManicureData>> ManicureRepository::getLastUserManicure(const std::string& userId) const {
+    std::lock_guard<std::mutex> lock(*storageMutex);
+
+    std::shared_ptr<ManicureData> latest = nullptr;
+
+    for (const auto& [id, data] : storage) {
+        if (data->ownerId && *data->ownerId == userId) {
+            if (!latest || data->createdAt > latest->createdAt) {
+                latest = data;
+            }
+        }
+    }
+
+    if (!latest) {
+        return std::nullopt;
+    }
+
+    return latest;
+}
+
+std::vector<std::shared_ptr<ManicureData>> ManicureRepository::getUserManicures(const std::string& userId) const {
+    std::lock_guard<std::mutex> lock(*storageMutex);
+
+    std::vector<std::shared_ptr<ManicureData>> result;
+    result.reserve(storage.size()); // Предварительное выделение памяти
+
+    for (const auto& [id, data] : storage) {
+        if (data->ownerId && *data->ownerId == userId) {
+            result.push_back(data);
+        }
+    }
+
+    return result;
+}
+
+std::vector<std::shared_ptr<ManicureData>> ManicureRepository::search(const std::string& text) const {
+    std::lock_guard<std::mutex> lock(*storageMutex);
+
+    std::vector<std::shared_ptr<ManicureData>> result;
+
+    for (const auto& [id, data] : storage) {
+        if (data->description.find(text) != std::string::npos) {
+            result.push_back(data);
+        }
+    }
+
+    return result;
+}
+
+std::optional<bool> ManicureRepository::remove(const std::string& id) {
+    std::lock_guard<std::mutex> lock(*storageMutex);
+
+    auto it = storage.find(id);
+    if (it == storage.end()) {
+        return std::nullopt; // Не нашли - возвращаем nullopt
+    }
+
+    storage.erase(it);
+    return true; // Успешно удалили
+}
+
+size_t ManicureRepository::size() const noexcept {
+    std::lock_guard<std::mutex> lock(*storageMutex);
+    return storage.size();
+}
+
+void ManicureRepository::clear() noexcept {
+    std::lock_guard<std::mutex> lock(*storageMutex);
+    storage.clear();
+}
+
+void ManicureRepository::saveToFile(const std::string& filename) const {
+    std::lock_guard<std::mutex> lock(*storageMutex);
+
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Cannot open file for writing: " + filename);
+    }
+
+    for (const auto& [id, data] : storage) {
+        nlohmann::json j;
+        j["id"] = data->id;
+        j["description"] = data->description;
+        j["filePath"] = data->filePath.string();
+        j["repoType"] = data->repoType;
+        if (data->ownerId) {
+            j["ownerId"] = *data->ownerId;
+        }
+
+        file << j.dump() << std::endl;
+    }
+}
+
+void ManicureRepository::loadFromFile(const std::string& filename) {
+    std::lock_guard<std::mutex> lock(*storageMutex);
+
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Cannot open file for reading: " + filename);
+    }
+
+    storage.clear();
+
+    std::string line;
+    while (std::getline(file, line)) {
+        try {
+            auto j = nlohmann::json::parse(line);
+
+            auto data = std::make_shared<ManicureData>();
+            data->id = j["id"].get<std::string>();
+            data->description = j["description"].get<std::string>();
+            data->filePath = j["filePath"].get<std::string>();
+            data->repoType = j["repoType"].get<std::string>();
+
+            if (j.contains("ownerId") && !j["ownerId"].is_null()) {
+                data->ownerId = j["ownerId"].get<std::string>();
+            }
+
+            data->createdAt = std::chrono::system_clock::now(); // В реальности сохраняли бы timestamp
+
+            storage[data->id] = std::move(data);
+
+        } catch (const nlohmann::json::exception& e) {
+            throw std::runtime_error("Error parsing JSON: " + std::string(e.what()));
+        }
+    }
+}
+
+// Обновленный конструктор TelegramBot
+TelegramBot::TelegramBot(const std::string& token)
+        : botToken(token),
+          apiUrl("https://api.telegram.org/bot" + token),
+          repository(std::make_unique<ManicureRepository>()),
+          logger(std::make_shared<Logger>("bot.log")) {
+
+    try {
+        // Пытаемся загрузить сохраненные данные
+        repository->loadFromFile("manicures.dat");
+        logger->log("Loaded " + std::to_string(repository->size()) + " manicures from file");
+    } catch (const std::exception& e) {
+        logger->log(std::string("Failed to load from file: ") + e.what());
+        // Не фатально, продолжаем с пустым репозиторием
+    }
+}
 
 void TelegramBot::start() {
     while (true) {
