@@ -114,17 +114,23 @@ void TelegramBot::handleManicureRequest(const std::string& chatId) {
 
 void TelegramBot::saveManicureData(const std::string& chatId, const std::string& photoUrl, const std::string& description) {
     // Получаем текущее время
-    std::time_t now = std::time(nullptr);
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
+
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&now), "%Y-%m-%d %H:%M:%S");
+    ss << std::put_time(std::localtime(&now_time_t), "%Y-%m-%d %H:%M:%S");
+
     // Создаем уникальный ID для записи
-    std::string dataId = chatId + "_" + std::to_string(now);
+    std::string dataId = chatId + "_" + std::to_string(now_time_t);
+
     // Сохраняем данные
     ManicureData data;
-    data.photoUrl = photoUrl;
+    data.id = dataId;  // PhotoId
     data.description = description;
-    data.userId = chatId;
-    data.timestamp = ss.str();
+    data.filePath = std::filesystem::path(photoUrl);  // filePath вместо photoUrl
+    data.createdAt = now;  // createdAt вместо timestamp
+    data.repoType = "memory";  // repoType
+    data.ownerId = chatId;  // ownerId
 
     manicureStorage[dataId] = data;
 
@@ -136,11 +142,16 @@ void TelegramBot::saveManicureData(const std::string& chatId, const std::string&
 void TelegramBot::showManicureData(const std::string& chatId, const std::string& dataId) {
     if (manicureStorage.find(dataId) != manicureStorage.end()) {
         ManicureData& data = manicureStorage[dataId];
+        // Преобразуем время для отображения
+        std::time_t createdAt_time_t = std::chrono::system_clock::to_time_t(data.createdAt);
+        std::stringstream ss;
+        ss << std::put_time(std::localtime(&createdAt_time_t), "%Y-%m-%d %H:%M:%S");
+
         std::string message =
                 " Маникюр успешно сохранен!\n\n"
-                " Ссылка на фото:\n" + data.photoUrl + "\n\n"
+                " Ссылка на фото:\n" + data.filePath.string() + "\n\n"
                 " Описание:\n" + data.description + "\n\n"
-                " Время сохранения:\n" + data.timestamp + "\n\n"
+                " Время сохранения:\n" + ss.str() + "\n\n"
                 "Используйте /new чтобы добавить еще один маникюр.";
         sendMessage(chatId, message);
         //сюда допишем отправку нового маникюра

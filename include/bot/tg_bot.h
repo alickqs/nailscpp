@@ -1,20 +1,23 @@
 #ifndef TG_BOT_H
 #define TG_BOT_H
 
-
 #include <string>
 #include <functional>
 #include <vector>
 #include <utility>
 #include <map>
+#include <optional>
+#include <chrono>
+#include <filesystem>
 #include <nlohmann/json.hpp>
 
-
 struct ManicureData {
-    std::string photoUrl;
+    std::string id;  // PhotoId
     std::string description;
-    std::string userId;
-    std::string timestamp;
+    std::filesystem::path filePath;
+    std::chrono::system_clock::time_point createdAt;
+    std::string repoType;
+    std::optional<std::string> ownerId;
 };
 
 class TelegramBot {

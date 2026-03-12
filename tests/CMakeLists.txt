@@ -16,6 +16,7 @@ include(GoogleTest)
 
 add_executable(nailscpp_smoke_test
         smoke_test1.cpp
+        ../include/bot/manicure_data.h
 )
 
 target_link_libraries(nailscpp_smoke_test PRIVATE
