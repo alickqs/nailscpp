@@ -34,4 +34,4 @@ else()
     target_compile_options(nailscpp_smoke_test PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-gtest_discover_tests(nailscpp_smoke_test)
+gtest_discover_tests(nailscpp_smoke_test DISCOVERY_TIMEOUT 30)

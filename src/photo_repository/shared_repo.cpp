@@ -7,6 +7,6 @@
 SharedRepository::SharedRepository(std::filesystem::path storageDirectory)
     : PhotoRepository(std::move(storageDirectory), "shared", std::nullopt) {}
 
-PhotoId SharedRepository::importFromPersonal(const Photo& photo) {
-    return copyPhotoToThisRepository(photo);
+PhotoId SharedRepository::importFromPersonal(const ManiqureDataUpdated& data) {
+    return copyPhotoToThisRepository(data);
 }

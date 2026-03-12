@@ -11,7 +11,7 @@ class SharedRepository final : public PhotoRepository {
 public:
     explicit SharedRepository(std::filesystem::path storageDirectory);
 
-    PhotoId importFromPersonal(const Photo& photo);
+    PhotoId importFromPersonal(const ManiqureDataUpdated& data);
 };
 
 #endif //NAILSCPP_SHARED_REPO_H

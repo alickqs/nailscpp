@@ -1,7 +1,7 @@
 #ifndef NAILSCPP_METADATA_STORE_H
 #define NAILSCPP_METADATA_STORE_H
 
-#include "photo_repository/photo.h"
+#include "photo_repository/maniqure_data_updated.h"
 
 #include <filesystem>
 #include <memory>
@@ -23,10 +23,10 @@ public:
     MetadataStore& operator=(MetadataStore&&) noexcept = delete;
 
     void ensureSchema();
-    std::vector<Photo> loadAll(const std::string& repoType,
-                               const std::optional<std::string>& ownerId) const;
+    std::vector<ManiqureDataUpdated> loadAll(const std::string& repoType,
+                                             const std::optional<std::string>& ownerId) const;
     PhotoId loadMaxId() const;
-    void insertPhoto(const Photo& photo);
+    void insertPhoto(const ManiqureDataUpdated& photo);
     void deletePhoto(PhotoId id,
                      const std::string& repoType,
                      const std::optional<std::string>& ownerId);

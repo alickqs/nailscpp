@@ -15,8 +15,8 @@ PhotoRepository::PhotoRepository(std::filesystem::path storageDirectory,
     metadataStore_ = std::make_unique<MetadataStore>(storageDirectory_ / "metadata.sqlite3");
     metadataStore_->ensureSchema();
 
-    for (Photo& photo : metadataStore_->loadAll(repoType_, ownerId_)) {
-        photos_.push_back(std::make_unique<Photo>(std::move(photo)));
+    for (ManiqureDataUpdated& photo : metadataStore_->loadAll(repoType_, ownerId_)) {
+        photos_.push_back(std::make_unique<ManiqureDataUpdated>(std::move(photo)));
     }
 
     nextId_ = metadataStore_->loadMaxId() + 1;
@@ -45,8 +45,15 @@ PhotoId PhotoRepository::uploadFromDevice(const std::filesystem::path& sourcePat
             storedPath,
             std::filesystem::copy_options::overwrite_existing);
 
-        auto photo = std::make_unique<Photo>(
-            newId, std::move(description), storedPath, std::chrono::system_clock::now(), repoType_, ownerId_);
+        auto photo = std::make_unique<ManiqureDataUpdated>();
+        photo->id = newId;
+        photo->description = std::move(description);
+        photo->filePath = storedPath;
+        photo->createdAt = std::chrono::system_clock::now();
+        photo->repoType = repoType_;
+        photo->ownerId = ownerId_;
+        photo->photoUrl = storedPath.string();
+        photo->userId = ownerId_.value_or("");
         metadataStore_->insertPhoto(*photo);
         photos_.push_back(std::move(photo));
     } catch (const std::filesystem::filesystem_error& e) {
@@ -64,8 +71,10 @@ PhotoId PhotoRepository::uploadFromDevice(const std::filesystem::path& sourcePat
     return newId;
 }
 
-std::vector<Photo> PhotoRepository::listPhotos(std::size_t page, std::size_t pageSize) const {
-    std::vector<Photo> result;
+std::vector<ManiqureDataUpdated> PhotoRepository::listPhotos(
+    std::size_t page,
+    std::size_t pageSize) const {
+    std::vector<ManiqureDataUpdated> result;
 
     if (pageSize == 0) {
         return result;
@@ -86,8 +95,8 @@ std::vector<Photo> PhotoRepository::listPhotos(std::size_t page, std::size_t pag
     return result;
 }
 
-std::optional<Photo> PhotoRepository::getPhotoInfo(PhotoId id) const {
-    const Photo* photo = findPhotoById(id);
+std::optional<ManiqureDataUpdated> PhotoRepository::getPhotoInfo(PhotoId id) const {
+    const ManiqureDataUpdated* photo = findPhotoById(id);
     if (photo == nullptr) {
         return std::nullopt;
     }
@@ -97,7 +106,7 @@ std::optional<Photo> PhotoRepository::getPhotoInfo(PhotoId id) const {
 
 void PhotoRepository::downloadToDevice(PhotoId id,
                                        const std::filesystem::path& destinationPath) const {
-    const Photo* photo = findPhotoById(id);
+    const ManiqureDataUpdated* photo = findPhotoById(id);
     if (photo == nullptr) {
         throw PhotoNotFoundError("Photo not found");
     }
@@ -126,7 +135,7 @@ std::size_t PhotoRepository::size() const noexcept {
     return photos_.size();
 }
 
-PhotoId PhotoRepository::copyPhotoToThisRepository(const Photo& photoToCopy) {
+PhotoId PhotoRepository::copyPhotoToThisRepository(const ManiqureDataUpdated& photoToCopy) {
     if (!std::filesystem::exists(photoToCopy.filePath)) {
         throw FileOperationError("Original photo file does not exist: " +
                                  photoToCopy.filePath.string());
@@ -141,13 +150,16 @@ PhotoId PhotoRepository::copyPhotoToThisRepository(const Photo& photoToCopy) {
             newStoredPath,
             std::filesystem::copy_options::overwrite_existing);
 
-        auto copiedPhoto = std::make_unique<Photo>(
-            newId,
-            photoToCopy.description,
-            newStoredPath,
-            photoToCopy.createdAt,
-            repoType_,
-            ownerId_);
+        auto copiedPhoto = std::make_unique<ManiqureDataUpdated>();
+        copiedPhoto->id = newId;
+        copiedPhoto->description = photoToCopy.description;
+        copiedPhoto->filePath = newStoredPath;
+        copiedPhoto->createdAt = photoToCopy.createdAt;
+        copiedPhoto->repoType = repoType_;
+        copiedPhoto->ownerId = ownerId_;
+        copiedPhoto->photoUrl = newStoredPath.string();
+        copiedPhoto->userId = ownerId_.value_or("");
+        copiedPhoto->timestamp = photoToCopy.timestamp;
 
         metadataStore_->insertPhoto(*copiedPhoto);
         photos_.push_back(std::move(copiedPhoto));
@@ -170,7 +182,7 @@ void PhotoRepository::removePhoto(PhotoId id) {
     auto it = std::find_if(
         photos_.begin(),
         photos_.end(),
-        [id](const std::unique_ptr<Photo>& photo) {
+        [id](const std::unique_ptr<ManiqureDataUpdated>& photo) {
             return photo->id == id;
         });
 
@@ -199,22 +211,22 @@ const std::filesystem::path& PhotoRepository::getStorageDirectory() const noexce
     return storageDirectory_;
 }
 
-const Photo* PhotoRepository::findPhotoById(PhotoId id) const noexcept {
+const ManiqureDataUpdated* PhotoRepository::findPhotoById(PhotoId id) const noexcept {
     const auto it = std::find_if(
         photos_.begin(),
         photos_.end(),
-        [id](const std::unique_ptr<Photo>& photo) {
+        [id](const std::unique_ptr<ManiqureDataUpdated>& photo) {
             return photo->id == id;
         });
 
     return (it != photos_.end()) ? it->get() : nullptr;
 }
 
-Photo* PhotoRepository::findPhotoById(PhotoId id) noexcept {
+ManiqureDataUpdated* PhotoRepository::findPhotoById(PhotoId id) noexcept {
     const auto it = std::find_if(
         photos_.begin(),
         photos_.end(),
-        [id](const std::unique_ptr<Photo>& photo) {
+        [id](const std::unique_ptr<ManiqureDataUpdated>& photo) {
             return photo->id == id;
         });
 
@@ -246,7 +258,7 @@ std::vector<PhotoId> PhotoRepository::findByDescription(std::string_view query) 
     (void)query;
     std::vector<PhotoId> result;
     /*
-     место для реализации поиска
+    место для реализации поиска
      */
     return result;
 }
