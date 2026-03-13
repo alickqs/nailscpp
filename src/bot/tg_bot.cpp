@@ -1,6 +1,5 @@
-#include "tg_bot.h"
+
 #include <iostream>
-#include <ctime>
 #include <sstream>
 #include <iomanip>
 #include <fstream>
@@ -13,7 +12,12 @@
 #include <boost/beast.hpp>
 #include <boost/beast/ssl.hpp>
 #include <nlohmann/json.hpp>
+#include "bot/tg_bot.h"
+#include "photo_repository/maniqure_data_updated.h"  // If ManicureData is defined here
 
+#include <shared_mutex>
+#include <algorithm>
+#include <nlohmann/json.hpp>
 using tcp = boost::asio::ip::tcp;
 namespace http = boost::beast::http;
 namespace fs = std::filesystem;

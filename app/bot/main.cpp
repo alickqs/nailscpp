@@ -1,6 +1,9 @@
 //#include "tg_bot.h"
-#include "../../include/bot/tg_bot.h"
+#include "bot/tg_bot.h"
 #include <iostream>
+#include <csignal>
+#include <fstream>
+#include <atomic>
 #include <csignal>
 
 bool g_running = true;

@@ -10,6 +10,7 @@ include(CTest)
 option(BUILD_TELEGRAM_BOT "Build the Telegram bot application" OFF)
 
 add_subdirectory(src)
+add_subdirectory(benchmark)
 
 if(BUILD_TESTING)
     add_subdirectory(tests)
