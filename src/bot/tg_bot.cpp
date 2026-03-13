@@ -1,4 +1,4 @@
-//#include "tg_bot.h"
+#include "tg_bot.h"
 #include <iostream>
 #include <ctime>
 #include <sstream>
@@ -7,6 +7,7 @@
 #include <mutex>
 #include <thread>
 #include <random>
+#include <filesystem>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast.hpp>
@@ -15,59 +16,33 @@
 
 using tcp = boost::asio::ip::tcp;
 namespace http = boost::beast::http;
+namespace fs = std::filesystem;
 
-std::vector<char> generateTestPng() {
-    const unsigned char pngData[] = {
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,  // PNG signature
-            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,  // IHDR chunk
-            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,  // width=1, height=1
-            0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,  // color type, compression
-            0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,  // IDAT chunk
-            0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,  // data
-            0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,  // IEND chunk
-            0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,  // ...
-            0x42, 0x60, 0x82
-    };
-
-    std::vector<char> result;
-    result.assign(reinterpret_cast<const char*>(pngData),
-                  reinterpret_cast<const char*>(pngData) + sizeof(pngData));
-    return result;
-}
-
-// Функция для генерации рекомендации
+//функция для генерации рекомендации
 RecommendationData generateNextManicureRecommendation(const ManicureData& lastManicure) {
     RecommendationData recommendation;
+    //девчоки вставьте сюда код для поиска нужного маникюра с id от 1 до 30 и его описание по описанию присланного
+    //вот пример для std::string id = "1";
+    //все почти готово, доделайте свою часть!!!!!!!!!!
+    std::string photoPath = "data/photos_nails++/1.jpg";
 
-    std::stringstream ss;
-    ss << "✨ *Рекомендация для следующего маникюра*\n\n";
-    ss << "На основе вашего маникюра:\n";
-    ss << "📝 " << lastManicure.description << "\n\n";
+    std::ifstream file(photoPath, std::ios::binary);
 
-    std::vector<std::string> tips = {
-            "Попробуйте добавить блестки для вечернего образа",
-            "Рекомендуем использовать пастельные тона в этом сезоне",
-            "Отличным дополнением будет французский маникюр",
-            "Попробуйте геометрический узор на одном пальце",
-            "Добавьте стразы для особого случая",
-            "Рекомендуем увлажняющий уход перед следующим покрытием"
-    };
+    file.seekg(0, std::ios::end);
+    size_t size = file.tellg();
+    file.seekg(0, std::ios::beg);
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, tips.size() - 1);
+    recommendation.imageData.resize(size);
+    file.read(recommendation.imageData.data(), size);
+    file.close();
 
-    ss << "💡 " << tips[dis(gen)] << "\n\n";
-    ss << "";
-
-    recommendation.description = ss.str();
-    recommendation.imageData = generateTestPng();
-    recommendation.imageFormat = "png";
-
+    recommendation.imageFormat = "jpg";
+    recommendation.description = "✨ Вот пример маникюра:";
+    std::cout << "✅ Фото загружено: " << photoPath << " (" << size << " байт)" << std::endl;
     return recommendation;
 }
 
-// Определение ConnectionPool
+//ConnectionPool
 struct TelegramBot::ConnectionPool {
     std::unique_ptr<boost::asio::io_context> ioc;
     std::unique_ptr<boost::asio::ssl::context> ssl_ctx;
@@ -79,7 +54,7 @@ struct TelegramBot::ConnectionPool {
     }
 };
 
-// Класс Logger (без изменений)
+//Logger
 class Logger {
 private:
     std::unique_ptr<std::ofstream> logFile;
@@ -115,10 +90,10 @@ public:
     }
 };
 
-// конструктор ManicureRepository
+//конструктор ManicureRepository
 ManicureRepository::ManicureRepository() : storageMutex(std::make_shared<std::mutex>()) {}
 
-// добавляем в репозиторий
+// добавяем в репозиторий
 void ManicureRepository::add(std::string id, std::shared_ptr<ManicureData> data) {
     std::lock_guard<std::mutex> lock(*storageMutex);
     if (!data) {
@@ -186,19 +161,40 @@ std::optional<bool> ManicureRepository::remove(const std::string& id) {
     if (it == storage.end()) {
         return std::nullopt;
     }
+
+    //удаляем файл с диска
+    try {
+        if (it->second->filePath != fs::path() && fs::exists(it->second->filePath)) {
+            fs::remove(it->second->filePath);
+        }
+    } catch (const std::exception& e) {
+        // Логируем ошибку, но продолжаем удаление из хранилища
+        std::cerr << "Failed to delete file: " << e.what() << std::endl;
+    }
+
     storage.erase(it);
     return true;
 }
 
-// размер репозитория
+//размер репозитория
 size_t ManicureRepository::size() const noexcept {
     std::lock_guard<std::mutex> lock(*storageMutex);
     return storage.size();
 }
 
-// очищаем репозиторий
+//очищаем репозиторий
 void ManicureRepository::clear() noexcept {
     std::lock_guard<std::mutex> lock(*storageMutex);
+    //удаляем все файлы
+    for (const auto& [id, data] : storage) {
+        try {
+            if (data->filePath != fs::path() && fs::exists(data->filePath)) {
+                fs::remove(data->filePath);
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to delete file: " << e.what() << std::endl;
+        }
+    }
     storage.clear();
 }
 
@@ -257,7 +253,7 @@ void ManicureRepository::loadFromFile(const std::string& filename) {
     }
 }
 
-// ActionVisitor
+//ActionVisitor
 void ActionVisitor::operator()(const ActionShowAll&) const {
     bot->showManicureList(chatId, bot->repository->getUserManicures(chatId));
 }
@@ -301,6 +297,8 @@ TelegramBot::TelegramBot(const std::string& token)
           logger(std::make_shared<Logger>("bot.log")) {
 
     try {
+        //создаем директорию для фотографий
+        fs::create_directories("photos");
         repository->loadFromFile("manicures.dat");
         logger->log("Loaded " + std::to_string(repository->size()) + " manicures from file");
     } catch (const std::exception& e) {
@@ -322,6 +320,105 @@ TelegramBot::~TelegramBot() {
     }
 }
 
+std::string TelegramBot::savePhotoToDisk(const std::vector<char>& photoData, const std::string& chatId) {
+    auto now = std::chrono::system_clock::now();
+    auto now_time_t = std::chrono::system_clock::to_time_t(now);
+
+    std::stringstream ss;
+    ss << "photos/" << chatId << "_" << now_time_t << "_" << (rand() % 1000) << ".jpg";
+    std::string filePath = ss.str();
+
+    std::ofstream file(filePath, std::ios::binary);
+    if (file.is_open()) {
+        file.write(photoData.data(), photoData.size());
+        file.close();
+        logger->log("Photo saved to disk: " + filePath);
+        return filePath;
+    }
+
+    throw std::runtime_error("Failed to save photo to disk");
+}
+
+std::vector<char> TelegramBot::getFileData(const std::string& filePath) {
+    std::ifstream file(filePath, std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("Cannot open file: " + filePath);
+    }
+
+    file.seekg(0, std::ios::end);
+    size_t size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::vector<char> data(size);
+    file.read(data.data(), size);
+    file.close();
+
+    return data;
+}
+
+std::string TelegramBot::downloadPhoto(const std::string& fileId) {
+    try {
+        nlohmann::json payload;
+        payload["file_id"] = fileId;
+
+        auto response = makeRequest("getFile", payload);
+
+        if (!response.contains("result") || !response["result"].contains("file_path")) {
+            throw std::runtime_error("Failed to get file path");
+        }
+
+        std::string filePath = response["result"]["file_path"].get<std::string>();
+        std::string downloadUrl = "https://api.telegram.org/file/bot" + botToken + "/" + filePath;
+
+        auto* conn = getConnection();
+
+        tcp::resolver resolver(*conn->ioc);
+        boost::beast::ssl_stream<boost::beast::tcp_stream> stream(*conn->ioc, *conn->ssl_ctx);
+
+        auto const results = resolver.resolve("api.telegram.org", "443");
+        boost::beast::get_lowest_layer(stream).connect(results);
+        stream.handshake(boost::asio::ssl::stream_base::client);
+
+        http::request<http::string_body> req{http::verb::get, "/file/bot" + botToken + "/" + filePath, 11};
+        req.set(http::field::host, "api.telegram.org");
+
+        http::write(stream, req);
+
+        boost::beast::flat_buffer buffer;
+        http::response<http::vector_body<char>> res;
+        http::read(stream, buffer, res);
+
+        if (res.result() != http::status::ok) {
+            throw std::runtime_error("Failed to download file");
+        }
+
+        return savePhotoToDisk(res.body(), "temp");
+
+    } catch (const std::exception& e) {
+        logger->log("Failed to download photo: " + std::string(e.what()));
+        throw;
+    }
+}
+
+//обрабатываем полученное фото
+void TelegramBot::handlePhoto(const std::string& chatId, const std::string& fileId, const std::string& fileUniqueId) {
+    try {
+        std::string localPath = downloadPhoto(fileId);
+        std::vector<char> photoData = getFileData(localPath);
+
+        if (userStates[chatId] == "waiting_for_photo") {
+            tempPhotos[chatId] = photoData;
+            userStates[chatId] = "waiting_for_description";
+            sendMessage(chatId, "✅ Фото получено! Теперь отправьте описание маникюра:");
+        } else {
+            sendMessage(chatId, "❓ Чтобы добавить маникюр, используйте /new");
+        }
+    } catch (const std::exception& e) {
+        logger->log("Error handling photo: " + std::string(e.what()));
+        sendMessage(chatId, "❌ Не удалось обработать фото. Попробуйте еще раз.");
+    }
+}
+
 //генерируем уникальный id
 std::string TelegramBot::generateUniqueId(const std::string& chatId) {
     auto now = std::chrono::system_clock::now();
@@ -340,7 +437,7 @@ TelegramBot::ConnectionPool* TelegramBot::getConnection() {
     return conn;
 }
 
-// очищаем кеш
+//очищаем кеш
 void TelegramBot::clearExpiredCache() {
     auto now = std::chrono::steady_clock::now();
     for (auto it = responseCache.begin(); it != responseCache.end();) {
@@ -398,59 +495,71 @@ void TelegramBot::handleUpdates(const nlohmann::json& updates) {
             continue;
         }
 
-        if (update.contains("message") && update["message"].contains("text")) {
+        if (update.contains("message")) {
             std::string chatId = std::to_string(update["message"]["chat"]["id"].get<int>());
-            std::string text = update["message"]["text"].get<std::string>();
 
-            if (text == "/cancel") {
-                userStates.erase(chatId);
-                searchQueries.erase(chatId);
-                tempPhotoUrls.erase(chatId);
-                sendMessage(chatId, "❌ Действие отменено.");
-                showMainMenu(chatId);
+            if (update["message"].contains("photo")) {
+                const auto& photos = update["message"]["photo"];
+                std::string fileId = photos.back()["file_id"].get<std::string>();
+                std::string fileUniqueId = photos.back()["file_unique_id"].get<std::string>();
+
+                handlePhoto(chatId, fileId, fileUniqueId);
                 continue;
             }
 
-            if (userStates[chatId] == "searching") {
-                handleSearchQuery(chatId, text);
-                userStates.erase(chatId);
-            }
-            else if (userStates[chatId] == "waiting_for_photo") {
-                tempPhotoUrls[chatId] = text;
-                userStates[chatId] = "waiting_for_description";
-                sendMessage(chatId, "✅ Ссылка получена! Теперь отправьте описание маникюра:");
-            }
-            else if (userStates[chatId] == "waiting_for_description") {
-                std::string photoUrl = tempPhotoUrls[chatId];
-                std::string description = text;
-                saveManicureData(chatId, photoUrl, description);
-                tempPhotoUrls.erase(chatId);
-                userStates.erase(chatId);
-            }
-            else if (text == "/start" || text == "/menu") {
-                showMainMenu(chatId);
-            }
-            else if (text == "/new") {
-                handleManicureRequest(chatId);
-            }
-            else if (text == "/help") {
-                std::string helpText =
-                        "📖 Доступные команды:\n"
-                        "/start - Показать главное меню\n"
-                        "/menu - Главное меню\n"
-                        "/new - Добавить новый маникюр\n"
-                        "/cancel - Отменить текущее действие\n"
-                        "/help - Это сообщение";
-                sendMessage(chatId, helpText);
-            }
-            else {
-                sendMessage(chatId, "❓ Неизвестная команда. Используйте /menu для навигации.");
+            if (update["message"].contains("text")) {
+                std::string text = update["message"]["text"].get<std::string>();
+
+                if (text == "/cancel") {
+                    userStates.erase(chatId);
+                    searchQueries.erase(chatId);
+                    tempPhotos.erase(chatId);
+                    sendMessage(chatId, "❌ Действие отменено.");
+                    showMainMenu(chatId);
+                    continue;
+                }
+
+                if (userStates[chatId] == "searching") {
+                    handleSearchQuery(chatId, text);
+                    userStates.erase(chatId);
+                }
+                else if (userStates[chatId] == "waiting_for_description") {
+                    if (tempPhotos.find(chatId) != tempPhotos.end()) {
+                        std::vector<char> photoData = tempPhotos[chatId];
+                        std::string description = text;
+                        saveManicureData(chatId, photoData, description);
+                        tempPhotos.erase(chatId);
+                        userStates.erase(chatId);
+                    } else {
+                        sendMessage(chatId, "❌ Ошибка: фото не найдено. Начните заново с /new");
+                        userStates.erase(chatId);
+                    }
+                }
+                else if (text == "/start" || text == "/menu") {
+                    showMainMenu(chatId);
+                }
+                else if (text == "/new") {
+                    handleManicureRequest(chatId);
+                }
+                else if (text == "/help") {
+                    std::string helpText =
+                            "📖 Доступные команды:\n"
+                            "/start - Показать главное меню\n"
+                            "/menu - Главное меню\n"
+                            "/new - Добавить новый маникюр (отправьте фото)\n"
+                            "/cancel - Отменить текущее действие\n"
+                            "/help - Это сообщение";
+                    sendMessage(chatId, helpText);
+                }
+                else {
+                    sendMessage(chatId, "❓ Неизвестная команда. Используйте /menu для навигации.");
+                }
             }
         }
     }
 }
 
-// Метод для отправки фото
+//метод для отправки фото
 void TelegramBot::sendPhoto(const std::string& chatId, const std::vector<char>& imageData, const std::string& caption) {
     try {
         std::string boundary = "----WebKitFormBoundary" + std::to_string(std::time(nullptr));
@@ -508,8 +617,18 @@ void TelegramBot::sendPhoto(const std::string& chatId, const std::vector<char>& 
 
     } catch (const std::exception& e) {
         logger->log("Failed to send photo: " + std::string(e.what()));
-        // Если не удалось отправить фото, отправляем обычное сообщение
         sendMessage(chatId, caption + "\n\n(Не удалось отправить изображение)");
+    }
+}
+
+//отправляем сохраненное фото
+void TelegramBot::sendStoredPhoto(const std::string& chatId, const std::string& filePath, const std::string& caption) {
+    try {
+        std::vector<char> photoData = getFileData(filePath);
+        sendPhoto(chatId, photoData, caption);
+    } catch (const std::exception& e) {
+        logger->log("Failed to send stored photo: " + std::string(e.what()));
+        sendMessage(chatId, caption + "\n\n(Фото недоступно)");
     }
 }
 
@@ -585,7 +704,7 @@ void TelegramBot::handleCallbackQuery(const nlohmann::json& callbackQuery) {
     else if (data == "cancel") {
         userStates.erase(chatId);
         searchQueries.erase(chatId);
-        tempPhotoUrls.erase(chatId);
+        tempPhotos.erase(chatId);
         sendMessage(chatId, "❌ Действие отменено.");
         showMainMenu(chatId);
     }
@@ -602,18 +721,20 @@ void TelegramBot::handleManicureRequest(const std::string& chatId) {
 
     auto keyboard = createInlineKeyboard(buttons);
     userStates[chatId] = "waiting_for_photo";
-    sendMessageWithKeyboard(chatId, "📸 Отправьте ссылку на фотографию маникюра:", keyboard);
+    sendMessageWithKeyboard(chatId, "📸 Отправьте фотографию маникюра:", keyboard);
 }
 
-//созраняем маникюр
-void TelegramBot::saveManicureData(const std::string& chatId, const std::string& photoUrl, const std::string& description) {
+//сохраняем маникюр
+void TelegramBot::saveManicureData(const std::string& chatId, const std::vector<char>& photoData, const std::string& description) {
     auto now = std::chrono::system_clock::now();
     std::string dataId = generateUniqueId(chatId);
+
+    std::string filePath = savePhotoToDisk(photoData, chatId);
 
     auto data = std::make_shared<ManicureData>();
     data->id = dataId;
     data->description = description;
-    data->filePath = std::filesystem::path(photoUrl);
+    data->filePath = fs::path(filePath);
     data->createdAt = now;
     data->repoType = "memory";
     data->ownerId = chatId;
@@ -731,12 +852,14 @@ void TelegramBot::showManicureDetails(const std::string& chatId, const std::stri
     std::stringstream ss;
     ss << std::put_time(std::localtime(&time_t), "%d.%m.%Y %H:%M:%S");
 
-    std::string message =
+    std::string caption =
             "💅 *Детали маникюра*\n\n"
             "🆔 ID: `" + data->id + "`\n"
                                    "📅 Дата: " + ss.str() + "\n"
-                                                           "📝 Описание:\n" + data->description + "\n\n"
-                                                                                                 "📸 [Ссылка на фото](" + data->filePath.string() + ")\n";
+                                                           "📝 Описание:\n" + data->description;
+
+    // Отправляем фото с подписью
+    sendStoredPhoto(chatId, data->filePath.string(), caption);
 
     std::vector<std::vector<std::pair<std::string, std::string>>> buttons = {
             {{"💡 Получить рекомендацию", "recommend_" + manicureId}, {"🗑 Удалить", "delete_" + manicureId}},
@@ -744,7 +867,7 @@ void TelegramBot::showManicureDetails(const std::string& chatId, const std::stri
     };
 
     auto keyboard = createInlineKeyboard(buttons);
-    sendMessageWithKeyboard(chatId, message, keyboard);
+    sendMessageWithKeyboard(chatId, "👆 *Фото выше*\n\nВыберите действие:", keyboard);
 }
 
 //обрабатываем кнопку поиск
@@ -815,9 +938,7 @@ void TelegramBot::showRecommendation(const std::string& chatId, const std::strin
     auto data = *dataOpt;
 
     RecommendationData recommendation = generateNextManicureRecommendation(*data);
-
     sendPhoto(chatId, recommendation.imageData, recommendation.description);
-
     std::vector<std::vector<std::pair<std::string, std::string>>> buttons = {
             {{"◀️ Назад к маникюру", "view_" + manicureId}, {"🏠 Главное меню", "back"}}
     };
@@ -850,7 +971,7 @@ nlohmann::json TelegramBot::createInlineKeyboard(const std::vector<std::vector<s
     return replyMarkup;
 }
 
-//отправляем сообщение
+//отправляем сообщение с клавиатурой
 void TelegramBot::sendMessageWithKeyboard(const std::string& chatId, const std::string& text, const nlohmann::json& keyboard) {
     nlohmann::json payload;
     payload["chat_id"] = chatId;

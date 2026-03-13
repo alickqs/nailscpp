@@ -15,9 +15,9 @@
 #include <thread>
 #include <nlohmann/json.hpp>
 
-// Структура данных маникюра
+//структура данных маникюра
 struct ManicureData {
-    std::string id;  // PhotoId
+    std::string id;
     std::string description;
     std::filesystem::path filePath;
     std::chrono::system_clock::time_point createdAt;
@@ -25,24 +25,24 @@ struct ManicureData {
     std::optional<std::string> ownerId;
 };
 
-// Структура для рекомендации
+//структура для рекомендации
 struct RecommendationData {
-    std::string description;           // Текстовое описание рекомендации
-    std::vector<char> imageData;        // Данные PNG изображения
+    std::string description;
+    std::vector<char> imageData;
     std::string imageFormat;
 };
 
-// Функция для генерации рекомендации
+//функция для генерации рекомендации
 RecommendationData generateNextManicureRecommendation(const ManicureData& lastManicure);
 
-// Репозиторий для работы с маникюрами
+//репозиторий для работы с маникюрами
 class ManicureRepository {
 private:
     std::map<std::string, std::shared_ptr<ManicureData>> storage;
     std::shared_ptr<std::mutex> storageMutex;
 
 public:
-    // конструктор и деструктор
+    //конструктор и деструктор
     ManicureRepository();
     ~ManicureRepository() = default;
 
@@ -65,7 +65,7 @@ public:
     void loadFromFile(const std::string& filename);
 };
 
-// типы действий пользователя
+//типы действий пользователя
 struct ActionShowAll {};
 struct ActionShowLast {};
 struct ActionSearch {};
@@ -88,10 +88,10 @@ private:
     std::string chatId;
 
 public:
-    // конструктор
+    //конструктор
     ActionVisitor(TelegramBot* b, const std::string& id) : bot(b), chatId(id) {}
 
-    // методы для обработки действий пользователя
+    //методы для обработки действий пользователя
     void operator()(const ActionShowAll&) const;
     void operator()(const ActionShowLast&) const;
     void operator()(const ActionSearch&) const;
@@ -110,7 +110,7 @@ private:
     std::shared_ptr<class Logger> logger;
 
     std::map<std::string, std::string> userStates;
-    std::map<std::string, std::string> tempPhotoUrls;
+    std::map<std::string, std::vector<char>> tempPhotos;
     std::map<std::string, std::string> searchQueries;
     std::map<std::string, int> userManicureCounters;
 
@@ -131,9 +131,14 @@ private:
     void sendMessageWithKeyboard(const std::string& chatId, const std::string& text, const nlohmann::json& keyboard);
     void handleCallbackQuery(const nlohmann::json& callbackQuery);
 
+    //методы для работы с фото
+    void handlePhoto(const std::string& chatId, const std::string& fileId, const std::string& fileUniqueId);
+    std::string downloadPhoto(const std::string& fileId);
+    std::vector<char> getFileData(const std::string& filePath);
+
     //методы для работы с маникюром
     void handleManicureRequest(const std::string& chatId);
-    void saveManicureData(const std::string& chatId, const std::string& photoUrl, const std::string& description);
+    void saveManicureData(const std::string& chatId, const std::vector<char>& photoData, const std::string& description);
     void showManicureData(const std::string& chatId, const std::string& dataId);
 
     // методы для работы с кнопочками
@@ -144,12 +149,14 @@ private:
     void confirmDelete(const std::string& chatId, const std::string& manicureId);
     void showRecommendation(const std::string& chatId, const std::string& manicureId);
 
-    // Новый метод для отправки фото
+    // методы для отправки фото
     void sendPhoto(const std::string& chatId, const std::vector<char>& imageData, const std::string& caption);
+    void sendStoredPhoto(const std::string& chatId, const std::string& filePath, const std::string& caption);
 
     void handleUserAction(const std::string& chatId, const UserAction& action);
 
     std::string generateUniqueId(const std::string& chatId);
+    std::string savePhotoToDisk(const std::vector<char>& photoData, const std::string& chatId);
     ConnectionPool* getConnection();
     void clearExpiredCache();
 
