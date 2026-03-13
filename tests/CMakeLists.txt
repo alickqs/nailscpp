@@ -15,7 +15,8 @@ endif()
 include(GoogleTest)
 
 add_executable(nailscpp_smoke_test
-        smoke_test1.cpp
+        photo_repository_smoke_test.cpp
+        photo_repository_sanity_test.cpp
 )
 
 target_link_libraries(nailscpp_smoke_test PRIVATE
