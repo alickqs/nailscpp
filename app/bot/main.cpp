@@ -16,7 +16,7 @@ int main() {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    std::string token = "8415530176:AAHvdnzVbkyixtn07YytgEhA_G7PK8BOlFQ";
+    std::string token = "8787953583:AAHKAbvyVVRJIFIn_-rvIGL5xc6TMhs0crY";
     try {
         TelegramBot bot(token);
 
