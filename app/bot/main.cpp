@@ -1,4 +1,4 @@
-#include <include/bot/tg_bot.h>
+#include "bot/tg_bot.h"
 #include <iostream>
 #include <csignal>
 #include <fstream>
