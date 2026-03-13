@@ -5,6 +5,7 @@ add_library(photo_repository
         photo_repository/personal_repo.cpp
         photo_repository/shared_repo.cpp
         photo_repository/metadata_store.cpp
+        ../include/bot/manicure_data.h
 )
 
 target_include_directories(photo_repository PUBLIC
@@ -17,6 +18,7 @@ target_link_libraries(photo_repository PUBLIC
 
 add_executable(nailscpp
         main.cpp
+        ../include/bot/manicure_data.h
 )
 
 target_link_libraries(nailscpp PRIVATE
