@@ -1096,7 +1096,7 @@ void TelegramBot::showRecommendation(const std::string& chatId, const std::strin
 
     try {
         RecommendationData recommendation = generateNextManicureRecommendation(*data);
-        sendPhoto(chatId, recommendation.imageData, recommendation.description);
+        sendPhoto(chatId, recommendation.imageData, "");
     } catch (const std::exception& e) {
         logger->log("ERROR: Recommendation failed for " + manicureId + ": " + std::string(e.what()));
         sendMessage(chatId, "❌ Не удалось сформировать/отправить подбор: " + std::string(e.what()));
@@ -1221,6 +1221,6 @@ nlohmann::json TelegramBot::makeRequest(const std::string& method, const nlohman
     }
 }
 
-void TelegramBot::setRequestHandlerForTests(RequestHandler handler) {
+void TelegramBot::setRequestHandlerForTests(TelegramBot::RequestHandler handler) {
     requestHandler = std::move(handler);
 }
