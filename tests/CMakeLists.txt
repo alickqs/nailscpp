@@ -42,3 +42,57 @@ else()
 endif()
 
 gtest_discover_tests(nailscpp_smoke_test DISCOVERY_TIMEOUT 30)
+
+add_executable(nailscpp_tg_bot_test
+        tg_bot_tests.cpp
+)
+
+target_link_libraries(nailscpp_tg_bot_test
+        PRIVATE
+        GTest::gtest_main
+        bot_lib
+)
+
+target_link_options(nailscpp_tg_bot_test PRIVATE
+        "LINKER:-all_load"
+)
+
+target_compile_definitions(nailscpp_tg_bot_test PRIVATE
+        NAILSCPP_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+        NAILSCPP_BINARY_DIR="${CMAKE_BINARY_DIR}"
+)
+
+if (MSVC)
+    target_compile_options(nailscpp_tg_bot_test PRIVATE /W4)
+else()
+    target_compile_options(nailscpp_tg_bot_test PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(nailscpp_tg_bot_test DISCOVERY_TIMEOUT 30)
+
+add_executable(nailscpp_tg_bot_photo_integration_test
+        tg_bot_repository_test.cpp
+)
+
+target_link_libraries(nailscpp_tg_bot_photo_integration_test
+        PRIVATE
+        GTest::gtest_main
+        bot_lib
+)
+
+target_link_options(nailscpp_tg_bot_photo_integration_test PRIVATE
+        "LINKER:-all_load"
+)
+
+target_compile_definitions(nailscpp_tg_bot_photo_integration_test PRIVATE
+        NAILSCPP_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+        NAILSCPP_BINARY_DIR="${CMAKE_BINARY_DIR}"
+)
+
+if (MSVC)
+    target_compile_options(nailscpp_tg_bot_photo_integration_test PRIVATE /W4)
+else()
+    target_compile_options(nailscpp_tg_bot_photo_integration_test PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+gtest_discover_tests(nailscpp_tg_bot_photo_integration_test DISCOVERY_TIMEOUT 30)
