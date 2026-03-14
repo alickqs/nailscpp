@@ -1,4 +1,4 @@
-
+#include "bot/tg_bot.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -13,7 +13,7 @@
 #include <boost/beast/ssl.hpp>
 #include <nlohmann/json.hpp>
 #include "bot/tg_bot.h"
-#include "photo_repository/maniqure_data_updated.h"  // If ManicureData is defined here
+#include "photo_repository/maniqure_data_updated.h"
 
 #include <shared_mutex>
 #include <algorithm>
