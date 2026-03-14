@@ -102,6 +102,8 @@ public:
 
 class TelegramBot {
 private:
+    using RequestHandler = std::function<nlohmann::json(const std::string&, const nlohmann::json&)>;
+
     std::string botToken;
     std::string apiUrl;
     std::string lastUpdateId;
@@ -120,6 +122,7 @@ private:
     };
     std::map<std::string, CacheEntry> responseCache;
     const std::chrono::seconds CACHE_TTL{30};
+    RequestHandler requestHandler;
 
     struct ConnectionPool;
     std::vector<std::unique_ptr<ConnectionPool>> connectionPool;
@@ -132,7 +135,7 @@ private:
     void handleCallbackQuery(const nlohmann::json& callbackQuery);
 
     //методы для работы с фото
-    void handlePhoto(const std::string& chatId, const std::string& fileId, const std::string& fileUniqueId);
+    void handlePhoto(const std::string& chatId, const std::string& fileId, const std::string& fileUniqueId [[maybe_unused]]);
     std::string downloadPhoto(const std::string& fileId);
     std::vector<char> getFileData(const std::string& filePath);
 
@@ -170,6 +173,7 @@ public:
     void handleUpdates(const nlohmann::json& updates);
     void sendMessage(const std::string& chatId, const std::string& text);
     nlohmann::json makeRequest(const std::string& method, const nlohmann::json& payload = {});
+    void setRequestHandlerForTests(RequestHandler handler);
 
     friend class ActionVisitor;
 };
