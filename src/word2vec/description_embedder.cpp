@@ -5,22 +5,26 @@ EmbeddingVector DescriptionEmbedder::embed(const std::string& text,
 
     auto tokens = tokenizer.tokenize(text);
 
-    EmbeddingVector vec(vocab.get_embedding(0).size());
+    EmbeddingVector result(dim);
 
-    size_t count = 0;
+    int count = 0;
 
-    for (const auto& t : tokens) {
+    for (auto& t : tokens) {
+        auto id = vocab.get_id(t);
+        if (!id) continue;
 
-        auto emb = vocab.get_embedding(t);
+        auto& w = vocab.get_embedding(*id);
 
-        if (!emb) continue;
+        for (size_t i = 0; i < dim; ++i)
+            result[i] += w[i];
 
-        vec.add(emb->get());
         count++;
     }
 
-    if (count > 0)
-        vec.scale(1.0 / count);
+    if (count == 0) return result;
 
-    return vec;
+    for (size_t i = 0; i < dim; ++i)
+        result[i] /= count;
+
+    return result;
 }

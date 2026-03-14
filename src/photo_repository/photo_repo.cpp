@@ -4,6 +4,19 @@
 #include <filesystem>
 #include <stdexcept>
 
+#include "word2vec/model/word2vec.hpp"
+#include "word2vec/search/description_embedder.hpp"
+#include "word2vec/search/similarity_engine.hpp"
+#include "globals.h"
+
+
+#include "photo_repository/photo_repo.h"
+
+// define them once here
+Word2VecModel model{50};
+DescriptionEmbedder embedder{50};
+SimilarityEngine search_index;
+bool ml_ready = false;
 PhotoRepository::PhotoRepository(std::filesystem::path storageDirectory,
                                  std::string repoType,
                                  std::optional<std::string> ownerId)
@@ -20,6 +33,38 @@ PhotoRepository::PhotoRepository(std::filesystem::path storageDirectory,
     }
 
     nextId_ = metadataStore_->loadMaxId() + 1;
+    if (!photos_.empty()) {
+
+        std::vector<std::vector<int>> corpus;
+
+        auto& vocab = model.get_vocabulary();
+
+        Tokenizer tok;
+
+        for (auto& p : photos_) {
+
+            auto tokens = tok.tokenize(p->description);
+
+            std::vector<int> sentence;
+
+            for (auto& t : tokens)
+                sentence.push_back(vocab.add_word(t));
+
+            corpus.push_back(sentence);
+        }
+
+        model.initialize_sampler();
+        model.train(corpus);
+
+        for (auto& p : photos_) {
+
+            auto vec = embedder.embed(p->description, vocab);
+            search_index.add(p->id, vec);
+        }
+
+        ml_ready = true;
+    }
+
 }
 
 PhotoId PhotoRepository::uploadFromDevice(const std::filesystem::path& sourcePath,

@@ -6,7 +6,7 @@
 #include <optional>
 #include <functional>
 
-#include "word2vec/embedding.hpp"
+#include "word2vec/embedding/embedding_vector.hpp"
 
 class Vocabulary {
 

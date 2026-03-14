@@ -1,149 +1,138 @@
 #include "word2vec/model/word2vec.hpp"
 #include "word2vec/core/exceptions.hpp"
-#include <fstream>
-#include <algorithm>
 #include <cmath>
+#include <algorithm>
+#include <fstream>
+#include <iostream>
 
-namespace {
-
-double sigmoid(double x) {
-    return 1.0 / (1.0 + std::exp(-x));
+Word2VecModel::Word2VecModel(size_t dim)
+    : vocab(dim),
+      learning_rate(0.025)
+{
 }
 
-}
-
-Word2VecModel::Word2VecModel(size_t embedding_dim)
-    : vocab(embedding_dim), learning_rate(0.025) {
-
-    shared_parameters = std::make_shared<std::vector<double>>(
-        std::initializer_list<double>{0.025, 0.95, 5});
-}
-
-void Word2VecModel::set_training_data(const std::vector<std::vector<int>>& data) {
-    training_data = data;
-}
-
-Vocabulary& Word2VecModel::get_vocabulary() {
+Vocabulary& Word2VecModel::get_vocabulary()
+{
     return vocab;
 }
 
-void Word2VecModel::initialize_sampler() {
-    sampler = std::make_unique<NegativeSampler>(vocab.get_frequencies());
+void Word2VecModel::initialize_sampler()
+{
+    sampler = std::make_unique<NegativeSampler>(
+        vocab.get_frequencies());
 }
 
-void Word2VecModel::train(const std::vector<std::vector<int>>& data) {
+void Word2VecModel::train(const std::vector<std::vector<int>>& data)
+{
+    if (!sampler)
+        throw ModelException("Negative sampler not initialized");
 
-    double lr = learning_rate;
-    const int epochs = 5;
-    const int negative_samples = 5;
+    const int window = 2;
 
-    for (int epoch = 0; epoch < epochs; ++epoch) {
+    for (const auto& sentence : data)
+    {
+        for (size_t i = 0; i < sentence.size(); ++i)
+        {
+            int target = sentence[i];
 
-        for (const auto& sentence : data) {
+            int start = std::max<int>(0, i - window);
+            int end   = std::min<int>(sentence.size(), i + window + 1);
 
-            for (size_t i = 0; i < sentence.size(); ++i) {
+            for (int j = start; j < end; ++j)
+            {
+                if (j == i) continue;
 
-                int target = sentence[i];
+                int context = sentence[j];
 
-                for (size_t j = 0; j < sentence.size(); ++j) {
+                train_pair(target, context, 1.0);
 
-                    if (i == j) continue;
-
-                    int context = sentence[j];
-
-                    train_pair(target, context, 1.0, lr);
-
-                    for (int k = 0; k < negative_samples; ++k) {
-                        int neg = sampler->sample();
-                        train_pair(target, neg, 0.0, lr);
-                    }
+                for (int k = 0; k < 5; ++k)
+                {
+                    int neg = sampler->sample();
+                    train_pair(target, neg, 0.0);
                 }
             }
         }
-
-        lr *= 0.95;
     }
 }
 
-void Word2VecModel::train_pair(int target, int context, double label, double lr) {
+void Word2VecModel::train_pair(int target,
+                               int context,
+                               double label)
+{
+    auto& v_target  = vocab.get_embedding(target);
+    auto& v_context = vocab.get_embedding(context);
 
-    auto& target_vec = vocab.get_embedding(target);
-    auto& context_vec = vocab.get_embedding(context);
+    double score = v_target.dot(v_context);
+    double pred  = 1.0 / (1.0 + std::exp(-score));
+    double grad  = learning_rate * (label - pred);
 
-    double dot = target_vec.dot(context_vec);
-    double pred = sigmoid(dot);
-    double grad = pred - label;
-
-    EmbeddingVector grad_t(target_vec.size());
-    EmbeddingVector grad_c(context_vec.size());
-
-    for (size_t i = 0; i < target_vec.size(); ++i) {
-        grad_t[i] = grad * context_vec[i];
-        grad_c[i] = grad * target_vec[i];
+    for (size_t d = 0; d < v_target.size(); ++d)
+    {
+        double temp = v_target[d];
+        v_target[d]  += grad * v_context[d];
+        v_context[d] += grad * temp;
     }
-
-    target_vec.sgd_update(grad_t, lr);
-    context_vec.sgd_update(grad_c, lr);
-}
-
-void Word2VecModel::save(const std::string& path) const {
-
-    std::ofstream file(path);
-
-    if (!file.is_open())
-        throw FileIOException(path);
-
-    file << vocab.size() << "\n";
-
-    for (size_t i = 0; i < vocab.size(); ++i) {
-
-        file << vocab.get_word(i);
-
-        const auto& emb = const_cast<Vocabulary&>(vocab).get_embedding(i);
-
-        for (size_t d = 0; d < emb.size(); ++d)
-            file << " " << emb[d];
-
-        file << "\n";
-    }
-}
-
-void Word2VecModel::load(const std::string& path) {
-    throw ModelException("Load not implemented");
-}
-
-double Word2VecModel::evaluate(const std::vector<int>&,
-                               const std::vector<int>&) const {
-    return 0.0;
 }
 
 std::optional<std::vector<std::pair<double,std::string>>>
-Word2VecModel::find_similar(const std::string& word, int k) {
-
-    auto emb_opt = vocab.get_embedding(word);
-
-    if (!emb_opt)
+Word2VecModel::find_similar(const std::string& word, int k)
+{
+    auto idOpt = vocab.get_id(word);
+    if (!idOpt)
         return std::nullopt;
 
-    auto& target = emb_opt->get();
+    int id = *idOpt;
 
     std::vector<std::pair<double,std::string>> result;
 
-    for (size_t i = 0; i < vocab.size(); ++i) {
+    const auto& vec = vocab.get_embedding(id);
 
-        auto& other = vocab.get_embedding(i);
+    for (size_t i = 0; i < vocab.size(); ++i)
+    {
+        if ((int)i == id) continue;
 
-        double sim = target.dot(other) /
-            (target.norm() * other.norm() + 1e-8);
+        double sim =
+            vec.dot(vocab.get_embedding(i)) /
+            (vec.norm() * vocab.get_embedding(i).norm() + 1e-9);
 
         result.emplace_back(sim, vocab.get_word(i));
     }
 
     std::sort(result.begin(), result.end(),
-              [](auto& a, auto& b) { return a.first > b.first; });
+              [](auto& a, auto& b)
+              {
+                  return a.first > b.first;
+              });
 
-    if (result.size() > static_cast<size_t>(k))
+    if ((int)result.size() > k)
         result.resize(k);
 
     return result;
+}
+
+void Word2VecModel::save(const std::string& path) const
+{
+    std::ofstream out(path, std::ios::binary);
+    if (!out)
+        throw FileIOException(path);
+
+    size_t vs = vocab.size();
+    out.write((char*)&vs, sizeof(vs));
+}
+
+void Word2VecModel::load(const std::string& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+        throw FileIOException(path);
+
+    size_t vs;
+    in.read((char*)&vs, sizeof(vs));
+}
+
+double Word2VecModel::evaluate(const std::vector<int>&,
+                               const std::vector<int>&) const
+{
+    return 0.0;
 }

@@ -1,8 +1,9 @@
 #pragma once
 #include <memory>
-#include <stdexcept>
+#include <cstddef>
 
-class EmbeddingVector {
+class EmbeddingVector
+{
 private:
     std::unique_ptr<double[]> data;
     size_t dimension;
@@ -15,11 +16,13 @@ public:
     EmbeddingVector& operator=(EmbeddingVector&& other) noexcept;
     ~EmbeddingVector() = default;
 
-    double& operator[](size_t index);
-    const double& operator[](size_t index) const;
-    size_t size() const { return dimension; }
+    double& operator[](size_t i);
+    const double& operator[](size_t i) const;
+
+    size_t size() const;
 
     double dot(const EmbeddingVector& other) const;
     double norm() const;
-    void sgd_update(const EmbeddingVector& gradient, double learning_rate);
+
+    void sgd_update(const EmbeddingVector& grad, double lr);
 };
