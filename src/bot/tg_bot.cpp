@@ -30,7 +30,33 @@ static Word2VecModel g_model(50);
 static DescriptionEmbedder g_embedder(128);
 static SimilarityEngine g_engine;
 static bool g_ml_initialized = false;
+static std::vector<std::string> g_corpus_descriptions;
 
+static fs::path projectRootFromFilePath()
+{
+    fs::path filePath = fs::path(__FILE__);
+    if (filePath.is_relative()) {
+        filePath = fs::absolute(filePath);
+    }
+
+    // .../src/bot/tg_bot.cpp -> project root
+    return filePath.parent_path().parent_path().parent_path();
+}
+
+static fs::path resolveDataPath(const fs::path& relativePath)
+{
+    const fs::path cwdCandidate = fs::current_path() / relativePath;
+    if (fs::exists(cwdCandidate)) {
+        return cwdCandidate;
+    }
+
+    const fs::path sourceCandidate = projectRootFromFilePath() / relativePath;
+    if (fs::exists(sourceCandidate)) {
+        return sourceCandidate;
+    }
+
+    return cwdCandidate;
+}
 
 
 static void initializeML()
@@ -39,20 +65,21 @@ static void initializeML()
 
     auto& vocab = g_model.get_vocabulary();
 
-    std::ifstream in("data/nails_corpus.txt");
+    const fs::path corpusPath = resolveDataPath("data/nails_corpus.txt");
+    std::ifstream in(corpusPath);
     if (!in.is_open())
-        throw std::runtime_error("cannot open corpus file");
+        throw std::runtime_error("cannot open corpus file: " + corpusPath.string());
 
     Tokenizer tok;
     std::vector<std::vector<int>> dataset;
-    std::vector<std::string> rawDescriptions;
+    g_corpus_descriptions.clear();
 
     std::string line;
     while (std::getline(in, line))
     {
         if (line.empty()) continue;
 
-        rawDescriptions.push_back(line);
+        g_corpus_descriptions.push_back(line);
 
         auto tokens = tok.tokenize(line);
 
@@ -69,9 +96,9 @@ static void initializeML()
     g_model.initialize_sampler();
     g_model.train(dataset);
 
-    for (size_t i = 0; i < rawDescriptions.size(); ++i)
+    for (size_t i = 0; i < g_corpus_descriptions.size(); ++i)
     {
-        auto vec = g_embedder.embed(rawDescriptions[i], vocab);
+        auto vec = g_embedder.embed(g_corpus_descriptions[i], vocab);
         g_engine.add(static_cast<int>(i), vec);
     }
 
@@ -88,19 +115,35 @@ RecommendationData generateNextManicureRecommendation(const ManicureData& lastMa
 
     auto queryVec = g_embedder.embed(lastManicure.description, vocab);
 
-    auto results = g_engine.search(queryVec, 1);
+    auto results = g_engine.search(queryVec, 5);
 
-    int bestId = 0;
-    if (!results.empty())
-        bestId = results.front().second;
+    if (results.empty()) {
+        throw std::runtime_error("no recommendation candidates");
+    }
 
-    std::string photoPath =
-        "data/photos_nails++/" + std::to_string(bestId + 1) + ".jpg";
+    int bestId = static_cast<int>(results.front().second);
+    fs::path photoPath;
+
+    for (const auto& [score, candidateId] : results) {
+        (void)score;
+        const fs::path candidatePhoto = resolveDataPath(
+            fs::path("data/photos_nails++") / (std::to_string(candidateId + 1) + ".jpg"));
+        if (fs::exists(candidatePhoto)) {
+            bestId = static_cast<int>(candidateId);
+            photoPath = candidatePhoto;
+            break;
+        }
+    }
+
+    if (photoPath.empty()) {
+        throw std::runtime_error(
+            "cannot open recommendation photo: expected extracted images in data/photos_nails++/");
+    }
 
     std::ifstream file(photoPath, std::ios::binary);
 
     if (!file.is_open())
-        throw std::runtime_error("cannot open recommendation photo");
+        throw std::runtime_error("cannot open recommendation photo: " + photoPath.string());
 
     file.seekg(0, std::ios::end);
     size_t size = file.tellg();
@@ -110,9 +153,13 @@ RecommendationData generateNextManicureRecommendation(const ManicureData& lastMa
     file.read(rec.imageData.data(), size);
 
     rec.imageFormat = "jpg";
+    const std::string matchedDescription =
+        (bestId >= 0 && static_cast<size_t>(bestId) < g_corpus_descriptions.size())
+            ? g_corpus_descriptions[bestId]
+            : lastManicure.description;
+
     rec.description =
-        "✨ Похожий маникюр по описанию:\n" +
-        lastManicure.description;
+        "✨ Похожий маникюр по описанию:\n" + matchedDescription;
 
     return rec;
 }
