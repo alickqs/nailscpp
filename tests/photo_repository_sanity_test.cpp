@@ -2,6 +2,7 @@
 #include "photo_repository/shared_repo.h"
 
 #include <gtest/gtest.h>
+#include <sqlite3.h>
 
 #include <filesystem>
 #include <string>
@@ -9,6 +10,22 @@
 namespace fs = std::filesystem;
 
 namespace {
+void executeSql(const fs::path& dbPath, const std::string& sql) {
+    sqlite3* db = nullptr;
+    ASSERT_EQ(sqlite3_open(dbPath.string().c_str(), &db), SQLITE_OK);
+
+    char* errMsg = nullptr;
+    const int rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &errMsg);
+    if (rc != SQLITE_OK) {
+        const std::string message = errMsg == nullptr ? "unknown sqlite error" : errMsg;
+        sqlite3_free(errMsg);
+        sqlite3_close(db);
+        FAIL() << "SQLite exec failed: " << message;
+    }
+
+    sqlite3_close(db);
+}
+
 class PhotoRepositorySanityTest : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -102,4 +119,55 @@ TEST_F(PhotoRepositorySanityTest, DownloadThrowsForUnknownPhoto) {
     SharedRepository shared(sharedRoot_);
 
     EXPECT_THROW(shared.downloadToDevice(9999, downloadsRoot_ / "missing.jpg"), PhotoNotFoundError);
+}
+
+TEST_F(PhotoRepositorySanityTest, FindByDescriptionIsCallableAndReturnsEmptyWhileNotImplemented) {
+    PersonalRepository personal(personalRoot_, "sanity-user");
+    personal.uploadFromDevice(sourcePhoto_, "red french");
+
+    const auto found = personal.findByDescription("red");
+    EXPECT_TRUE(found.empty());
+}
+
+TEST_F(PhotoRepositorySanityTest, DownloadFailsWhenFilePathInDatabasePointsToMissingFile) {
+    PhotoId uploadedId{};
+    {
+        SharedRepository shared(sharedRoot_);
+        uploadedId = shared.uploadFromDevice(sourcePhoto_, "broken path test");
+    }
+
+    const fs::path dbPath = sharedRoot_ / "metadata.sqlite3";
+    executeSql(
+        dbPath,
+        "UPDATE photos SET file_path = '/definitely/missing/file.jpg' WHERE id = " +
+            std::to_string(uploadedId) + ";");
+
+    SharedRepository reopened(sharedRoot_);
+    EXPECT_THROW(reopened.downloadToDevice(uploadedId, downloadsRoot_ / "broken.jpg"), FileOperationError);
+}
+
+TEST_F(PhotoRepositorySanityTest, TwoRepositoryInstancesCanHitIdCollision) {
+    PersonalRepository first(personalRoot_, "sanity-user");
+    PersonalRepository second(personalRoot_, "sanity-user");
+
+    const PhotoId firstId = first.uploadFromDevice(sourcePhoto_, "first uploader");
+    EXPECT_THROW(second.uploadFromDevice(sourcePhoto_, "second uploader"), PhotoRepositoryError);
+    EXPECT_TRUE(first.contains(firstId));
+}
+
+TEST_F(PhotoRepositorySanityTest, DeleteAfterFileRemovalFailsWhenDatabaseScopeIsTampered) {
+    PersonalRepository personal(personalRoot_, "sanity-user");
+    SharedRepository shared(sharedRoot_);
+
+    const PhotoId personalId = personal.uploadFromDevice(sourcePhoto_, "tamper delete scope");
+    const fs::path personalFilePath = personalRoot_ /
+                                      (std::to_string(personalId) + sourcePhoto_.extension().string());
+    ASSERT_TRUE(fs::exists(personalFilePath));
+
+    executeSql(
+        personalRoot_ / "metadata.sqlite3",
+        "UPDATE photos SET repo_type = 'tampered' WHERE id = " + std::to_string(personalId) + ";");
+
+    EXPECT_THROW(personal.exportPhotoToShared(personalId, shared, true), PhotoRepositoryError);
+    EXPECT_FALSE(fs::exists(personalFilePath));
 }
