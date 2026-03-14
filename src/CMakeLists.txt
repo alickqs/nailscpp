@@ -35,22 +35,11 @@ target_link_libraries(bot_lib PUBLIC
         OpenSSL::Crypto
 )
 
-# Main executable
-add_executable(nailscpp
-        main.cpp
-)
-
-target_link_libraries(nailscpp PRIVATE
-        bot_lib
-)
-
 # warnings
 if (MSVC)
     target_compile_options(photo_repository PRIVATE /W4)
     target_compile_options(bot_lib PRIVATE /W4)
-    target_compile_options(nailscpp PRIVATE /W4)
 else()
     target_compile_options(photo_repository PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(bot_lib PRIVATE -Wall -Wextra -Wpedantic)
-    target_compile_options(nailscpp PRIVATE -Wall -Wextra -Wpedantic)
 endif()

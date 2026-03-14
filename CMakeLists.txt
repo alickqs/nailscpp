@@ -7,19 +7,19 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(CTest)
 
-option(BUILD_TELEGRAM_BOT "Build the Telegram bot application" OFF)
+option(BUILD_BENCHMARKS "Build benchmark targets" OFF)
 
 add_subdirectory(src)
-add_subdirectory(benchmark)
+add_subdirectory(app)
+
+if(BUILD_BENCHMARKS)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/benchmark/CMakeLists.txt")
+        add_subdirectory(benchmark)
+    else()
+        message(WARNING "BUILD_BENCHMARKS is ON, but benchmark/CMakeLists.txt is missing. Benchmark targets will not be built.")
+    endif()
+endif()
 
 if(BUILD_TESTING)
     add_subdirectory(tests)
-endif()
-
-if(BUILD_TELEGRAM_BOT)
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/app/CMakeLists.txt")
-        add_subdirectory(app)
-    else()
-        message(WARNING "BUILD_TELEGRAM_BOT is ON, but app/CMakeLists.txt is missing. Telegram bot target will not be built.")
-    endif()
 endif()

@@ -4,12 +4,11 @@
 #include <fstream>
 #include <atomic>
 #include <csignal>
-
-bool g_running = true;
+#include <cstdlib>
 
 void signalHandler(int) {
     std::cout << "\n Остановка бота..." << std::endl;
-    g_running = false;
+    std::exit(0);
 }
 
 int main() {
@@ -17,7 +16,7 @@ int main() {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    std::string token = "8787953583:AAHKAbvyVVRJIFIn_-rvIGL5xc6TMhs0crY";
+    std::string token = "8415530176:AAHvdnzVbkyixtn07YytgEhA_G7PK8BOlFQ";
     try {
         TelegramBot bot(token);
 
