@@ -134,15 +134,38 @@ RecommendationData generateNextManicureRecommendation(const ManicureData& lastMa
         throw std::runtime_error("no recommendation candidates");
     }
 
-    int bestId = static_cast<int>(results.front().second);
-    fs::path photoPath = resolveDataPath("data/photos_nails++/5.png");
-    if (!fs::exists(photoPath)) {
-        photoPath = resolveDataPath("data/photos_nails++/5.jpg");
+    struct Candidate {
+        int id;
+        fs::path photoPath;
+        double score;
+    };
+
+    std::vector<Candidate> candidates;
+    candidates.reserve(results.size());
+
+    for (const auto& [score, candidateId] : results) {
+        const int id = static_cast<int>(candidateId);
+        fs::path path = resolveDataPath(fs::path("data/photos_nails++") / (std::to_string(id + 1) + ".png"));
+        if (!fs::exists(path)) {
+            path = resolveDataPath(fs::path("data/photos_nails++") / (std::to_string(id + 1) + ".jpg"));
+        }
+        if (fs::exists(path)) {
+            candidates.push_back({id, path, score});
+        }
     }
-    if (!fs::exists(photoPath)) {
+
+    if (candidates.empty()) {
         throw std::runtime_error(
-            "cannot open recommendation photo: expected 5.png (or 5.jpg) in data/photos_nails++/");
+            "cannot open recommendation photo: expected extracted images in data/photos_nails++/");
     }
+
+    // Небольшая вариативность: выбираем случайный вариант из топ-3 похожих.
+    const size_t topN = std::min<size_t>(3, candidates.size());
+    static std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<size_t> pick(0, topN - 1);
+    const Candidate chosen = candidates[pick(rng)];
+    const int bestId = chosen.id;
+    const fs::path photoPath = chosen.photoPath;
 
     std::ifstream file(photoPath, std::ios::binary);
 
@@ -157,7 +180,10 @@ RecommendationData generateNextManicureRecommendation(const ManicureData& lastMa
     file.read(rec.imageData.data(), size);
 
     rec.imageFormat = (photoPath.extension() == ".png") ? "png" : "jpg";
-    const std::string matchedDescription = "bows nails+cat eye nails";
+    const std::string matchedDescription =
+        (bestId >= 0 && static_cast<size_t>(bestId) < g_corpus_descriptions.size())
+            ? g_corpus_descriptions[bestId]
+            : lastManicure.description;
 
     rec.description =
         "✨ Похожий маникюр по описанию:\n" + matchedDescription;
@@ -1129,6 +1155,10 @@ void TelegramBot::sendMessage(const std::string& chatId, const std::string& text
 }
 
 nlohmann::json TelegramBot::makeRequest(const std::string& method, const nlohmann::json& payload) {
+    if (requestHandler) {
+        return requestHandler(method, payload);
+    }
+
     if (method == "getUpdates") {
         std::string cacheKey = method + payload.dump();
         auto it = responseCache.find(cacheKey);
@@ -1189,4 +1219,8 @@ nlohmann::json TelegramBot::makeRequest(const std::string& method, const nlohman
     } catch (const std::exception& e) {
         throw std::runtime_error(std::string("Request failed: ") + e.what());
     }
+}
+
+void TelegramBot::setRequestHandlerForTests(RequestHandler handler) {
+    requestHandler = std::move(handler);
 }

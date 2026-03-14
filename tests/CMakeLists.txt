@@ -45,6 +45,7 @@ gtest_discover_tests(nailscpp_smoke_test DISCOVERY_TIMEOUT 30)
 
 add_executable(nailscpp_tg_bot_test
         tg_bot_tests.cpp
+        tg_bot_commands_test.cpp
 )
 
 target_link_libraries(nailscpp_tg_bot_test
