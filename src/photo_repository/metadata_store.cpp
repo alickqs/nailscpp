@@ -220,6 +220,11 @@ void MetadataStore::deletePhoto(PhotoId id,
     if (sqlite3_step(statement.get()) != SQLITE_DONE) {
         throwSqliteError(db_, "Failed to delete photo metadata from SQLite");
     }
+
+    if (sqlite3_changes(db_) == 0) {
+        throw std::runtime_error(
+            "Photo metadata was not deleted: record not found in repository scope");
+    }
 }
 
 bool MetadataStore::hasColumn(const std::string& tableName, const std::string& columnName) const {
