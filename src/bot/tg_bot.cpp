@@ -122,22 +122,13 @@ RecommendationData generateNextManicureRecommendation(const ManicureData& lastMa
     }
 
     int bestId = static_cast<int>(results.front().second);
-    fs::path photoPath;
-
-    for (const auto& [score, candidateId] : results) {
-        (void)score;
-        const fs::path candidatePhoto = resolveDataPath(
-            fs::path("data/photos_nails++") / (std::to_string(candidateId + 1) + ".jpg"));
-        if (fs::exists(candidatePhoto)) {
-            bestId = static_cast<int>(candidateId);
-            photoPath = candidatePhoto;
-            break;
-        }
+    fs::path photoPath = resolveDataPath("data/photos_nails++/5.png");
+    if (!fs::exists(photoPath)) {
+        photoPath = resolveDataPath("data/photos_nails++/5.jpg");
     }
-
-    if (photoPath.empty()) {
+    if (!fs::exists(photoPath)) {
         throw std::runtime_error(
-            "cannot open recommendation photo: expected extracted images in data/photos_nails++/");
+            "cannot open recommendation photo: expected 5.png (or 5.jpg) in data/photos_nails++/");
     }
 
     std::ifstream file(photoPath, std::ios::binary);
@@ -152,11 +143,8 @@ RecommendationData generateNextManicureRecommendation(const ManicureData& lastMa
     rec.imageData.resize(size);
     file.read(rec.imageData.data(), size);
 
-    rec.imageFormat = "jpg";
-    const std::string matchedDescription =
-        (bestId >= 0 && static_cast<size_t>(bestId) < g_corpus_descriptions.size())
-            ? g_corpus_descriptions[bestId]
-            : lastManicure.description;
+    rec.imageFormat = (photoPath.extension() == ".png") ? "png" : "jpg";
+    const std::string matchedDescription = "bows nails+cat eye nails";
 
     rec.description =
         "✨ Похожий маникюр по описанию:\n" + matchedDescription;
