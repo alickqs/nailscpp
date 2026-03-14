@@ -11,6 +11,7 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/beast.hpp>
 #include <boost/beast/ssl.hpp>
+#include <openssl/ssl.h>
 #include <nlohmann/json.hpp>
 #include "bot/tg_bot.h"
 #include "photo_repository/maniqure_data_updated.h"
@@ -26,6 +27,18 @@
 using tcp = boost::asio::ip::tcp;
 namespace http = boost::beast::http;
 namespace fs = std::filesystem;
+namespace {
+constexpr const char* kTelegramHost = "api.telegram.org";
+
+void configureTlsPeer(boost::beast::ssl_stream<boost::beast::tcp_stream>& stream) {
+    if (!SSL_set_tlsext_host_name(stream.native_handle(), kTelegramHost)) {
+        throw std::runtime_error("Failed to set TLS SNI hostname");
+    }
+    stream.set_verify_mode(boost::asio::ssl::verify_peer);
+    stream.set_verify_callback(boost::asio::ssl::host_name_verification(kTelegramHost));
+}
+}
+
 static Word2VecModel g_model(50);
 static DescriptionEmbedder g_embedder(128);
 static SimilarityEngine g_engine;
@@ -485,12 +498,13 @@ std::string TelegramBot::downloadPhoto(const std::string& fileId) {
         tcp::resolver resolver(*conn->ioc);
         boost::beast::ssl_stream<boost::beast::tcp_stream> stream(*conn->ioc, *conn->ssl_ctx);
 
-        auto const results = resolver.resolve("api.telegram.org", "443");
+        auto const results = resolver.resolve(kTelegramHost, "443");
         boost::beast::get_lowest_layer(stream).connect(results);
+        configureTlsPeer(stream);
         stream.handshake(boost::asio::ssl::stream_base::client);
 
         http::request<http::string_body> req{http::verb::get, "/file/bot" + botToken + "/" + filePath, 11};
-        req.set(http::field::host, "api.telegram.org");
+        req.set(http::field::host, kTelegramHost);
 
         http::write(stream, req);
 
@@ -699,12 +713,13 @@ void TelegramBot::sendPhoto(const std::string& chatId, const std::vector<char>& 
         tcp::resolver resolver(*conn->ioc);
         boost::beast::ssl_stream<boost::beast::tcp_stream> stream(*conn->ioc, *conn->ssl_ctx);
 
-        auto const results = resolver.resolve("api.telegram.org", "443");
+        auto const results = resolver.resolve(kTelegramHost, "443");
         boost::beast::get_lowest_layer(stream).connect(results);
+        configureTlsPeer(stream);
         stream.handshake(boost::asio::ssl::stream_base::client);
 
         http::request<http::vector_body<char>> req{http::verb::post, "/bot" + botToken + "/sendPhoto", 11};
-        req.set(http::field::host, "api.telegram.org");
+        req.set(http::field::host, kTelegramHost);
         req.set(http::field::content_type, "multipart/form-data; boundary=" + boundary);
         req.set(http::field::content_length, std::to_string(requestBody.size()));
         req.body() = std::move(requestBody);
@@ -721,6 +736,12 @@ void TelegramBot::sendPhoto(const std::string& chatId, const std::vector<char>& 
 
         if (ec && ec != boost::asio::ssl::error::stream_truncated) {
             throw boost::system::system_error(ec);
+        }
+
+        const auto responseJson = nlohmann::json::parse(res.body());
+        if (!responseJson.value("ok", false)) {
+            const std::string description = responseJson.value("description", "unknown Telegram API error");
+            throw std::runtime_error("sendPhoto failed: " + description);
         }
 
         logger->log("Photo sent to " + chatId + ", size: " + std::to_string(imageData.size()) + " bytes");
@@ -1047,8 +1068,15 @@ void TelegramBot::showRecommendation(const std::string& chatId, const std::strin
 
     auto data = *dataOpt;
 
-    RecommendationData recommendation = generateNextManicureRecommendation(*data);
-    sendPhoto(chatId, recommendation.imageData, recommendation.description);
+    try {
+        RecommendationData recommendation = generateNextManicureRecommendation(*data);
+        sendPhoto(chatId, recommendation.imageData, recommendation.description);
+    } catch (const std::exception& e) {
+        logger->log("ERROR: Recommendation failed for " + manicureId + ": " + std::string(e.what()));
+        sendMessage(chatId, "❌ Не удалось сформировать/отправить подбор: " + std::string(e.what()));
+        showMainMenu(chatId);
+        return;
+    }
     std::vector<std::vector<std::pair<std::string, std::string>>> buttons = {
             {{"◀️ Назад к маникюру", "view_" + manicureId}, {"🏠 Главное меню", "back"}}
     };
@@ -1117,12 +1145,13 @@ nlohmann::json TelegramBot::makeRequest(const std::string& method, const nlohman
         tcp::resolver resolver(*conn->ioc);
         boost::beast::ssl_stream<boost::beast::tcp_stream> stream(*conn->ioc, *conn->ssl_ctx);
 
-        auto const results = resolver.resolve("api.telegram.org", "443");
+        auto const results = resolver.resolve(kTelegramHost, "443");
         boost::beast::get_lowest_layer(stream).connect(results);
+        configureTlsPeer(stream);
         stream.handshake(boost::asio::ssl::stream_base::client);
 
         http::request<http::string_body> req{http::verb::post, "/bot" + botToken + "/" + method, 11};
-        req.set(http::field::host, "api.telegram.org");
+        req.set(http::field::host, kTelegramHost);
         req.set(http::field::content_type, "application/json");
         req.set(http::field::connection, "keep-alive");
 
@@ -1145,6 +1174,10 @@ nlohmann::json TelegramBot::makeRequest(const std::string& method, const nlohman
         }
 
         auto result = nlohmann::json::parse(res.body());
+        if (result.contains("ok") && !result["ok"].get<bool>()) {
+            const std::string description = result.value("description", "Telegram API error");
+            throw std::runtime_error(method + " failed: " + description);
+        }
 
         if (method == "getUpdates") {
             std::string cacheKey = method + payload.dump();
