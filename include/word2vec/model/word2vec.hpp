@@ -7,7 +7,7 @@
 
 #include "word2vec/core/ITrainable.hpp"
 #include "word2vec/data/vocabulary.hpp"
-#include "word2vec/sampling/NegativeSampler.hpp"
+#include "word2vec/sampling/negative_sampler.hpp"
 
 class Word2VecModel : public ITrainable {
 

@@ -12,6 +12,11 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include "word2vec/model/word2vec.hpp"
+#include "word2vec/search/description_embedder.hpp"
+#include "word2vec/search/similarity_engine.hpp"
+#include "word2vec/search/similarity_engine.hpp"
+#include "word2vec/model/word2vec.hpp"
 
 
 class PhotoRepositoryError : public std::runtime_error {

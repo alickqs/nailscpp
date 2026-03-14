@@ -1,18 +1,19 @@
 #pragma once
 #include <vector>
-#include <string>
 #include <utility>
-#include "../embedding.hpp"
+#include "word2vec/embedding/embedding_vector.hpp"
+
+#include "photo_repository/maniqure_data_updated.h"
 
 class SimilarityEngine {
 private:
-    std::vector<EmbeddingVector> description_vectors;
-    std::vector<std::string> descriptions;
+    std::vector<EmbeddingVector> vectors;
+    std::vector<PhotoId> ids;
 
 public:
-    void add(const std::string& description, const EmbeddingVector& vec);
+    void add(PhotoId id, const EmbeddingVector& vec);
 
-    std::vector<std::pair<double,std::string>>
+    std::vector<std::pair<double, PhotoId>>
     search(const EmbeddingVector& query, size_t k) const;
 
     size_t size() const;

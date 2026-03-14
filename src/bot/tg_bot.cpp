@@ -13,37 +13,108 @@
 #include <boost/beast/ssl.hpp>
 #include <nlohmann/json.hpp>
 #include "bot/tg_bot.h"
-#include "photo_repository/maniqure_data_updated.h"  // If ManicureData is defined here
-
+#include "photo_repository/maniqure_data_updated.h"
+#include "word2vec/search/description_embedder.hpp"
+#include "word2vec/search/similarity_engine.hpp"
+#include "word2vec/model/word2vec.hpp"
+#include "word2vec/data/tokenizer.hpp"
+#include "word2vec/data/vocabulary.hpp"
 #include <shared_mutex>
 #include <algorithm>
 #include <nlohmann/json.hpp>
+#include "globals.h"
 using tcp = boost::asio::ip::tcp;
 namespace http = boost::beast::http;
 namespace fs = std::filesystem;
+static Word2VecModel g_model(50);
+static DescriptionEmbedder g_embedder(128);
+static SimilarityEngine g_engine;
+static bool g_ml_initialized = false;
 
-//функция для генерации рекомендации
-RecommendationData generateNextManicureRecommendation(const ManicureData& lastManicure) {
-    RecommendationData recommendation;
-    //девчоки вставьте сюда код для поиска нужного маникюра с id от 1 до 30 и его описание по описанию присланного
-    //вот пример для std::string id = "1";
-    //все почти готово, доделайте свою часть!!!!!!!!!!
-    std::string photoPath = "data/photos_nails++/1.jpg";
+
+
+static void initializeML()
+{
+    if (g_ml_initialized) return;
+
+    auto& vocab = g_model.get_vocabulary();
+
+    std::ifstream in("data/nails_corpus.txt");
+    if (!in.is_open())
+        throw std::runtime_error("cannot open corpus file");
+
+    Tokenizer tok;
+    std::vector<std::vector<int>> dataset;
+    std::vector<std::string> rawDescriptions;
+
+    std::string line;
+    while (std::getline(in, line))
+    {
+        if (line.empty()) continue;
+
+        rawDescriptions.push_back(line);
+
+        auto tokens = tok.tokenize(line);
+
+        std::vector<int> sent;
+        for (auto& t : tokens)
+            sent.push_back(vocab.add_word(t));
+
+        dataset.push_back(sent);
+    }
+
+    if (dataset.empty())
+        throw std::runtime_error("corpus empty");
+
+    g_model.initialize_sampler();
+    g_model.train(dataset);
+
+    for (size_t i = 0; i < rawDescriptions.size(); ++i)
+    {
+        auto vec = g_embedder.embed(rawDescriptions[i], vocab);
+        g_engine.add(static_cast<int>(i), vec);
+    }
+
+    g_ml_initialized = true;
+}
+
+RecommendationData generateNextManicureRecommendation(const ManicureData& lastManicure)
+{
+    initializeML();
+
+    RecommendationData rec;
+
+    auto& vocab = g_model.get_vocabulary();
+
+    auto queryVec = g_embedder.embed(lastManicure.description, vocab);
+
+    auto results = g_engine.search(queryVec, 1);
+
+    int bestId = 0;
+    if (!results.empty())
+        bestId = results.front().second;
+
+    std::string photoPath =
+        "data/photos_nails++/" + std::to_string(bestId + 1) + ".jpg";
 
     std::ifstream file(photoPath, std::ios::binary);
+
+    if (!file.is_open())
+        throw std::runtime_error("cannot open recommendation photo");
 
     file.seekg(0, std::ios::end);
     size_t size = file.tellg();
     file.seekg(0, std::ios::beg);
 
-    recommendation.imageData.resize(size);
-    file.read(recommendation.imageData.data(), size);
-    file.close();
+    rec.imageData.resize(size);
+    file.read(rec.imageData.data(), size);
 
-    recommendation.imageFormat = "jpg";
-    recommendation.description = "✨ Вот пример маникюра:";
-    std::cout << "✅ Фото загружено: " << photoPath << " (" << size << " байт)" << std::endl;
-    return recommendation;
+    rec.imageFormat = "jpg";
+    rec.description =
+        "✨ Похожий маникюр по описанию:\n" +
+        lastManicure.description;
+
+    return rec;
 }
 
 //ConnectionPool
