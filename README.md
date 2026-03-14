@@ -1,7 +1,7 @@
 # NailsCPP
 #### ML-powered service for smart nail design recommendation right in telegram
 
-#####Role distribution:
+Role distribution:
 Alima Chekueva (alickqs) : word2vec implementation & benchmarks (include/word2vec; src/word2vec; benchmarks directories)
 Stoyan Uliana : SQLite database & tests
 Mitrichieva Anna : tg bot & dataset
